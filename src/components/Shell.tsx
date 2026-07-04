@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Pizza, Cpu } from "lucide-react";
+import { Pizza } from "lucide-react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
+import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
 
 const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
