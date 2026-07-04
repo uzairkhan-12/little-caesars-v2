@@ -48,9 +48,11 @@ export function Header() {
               CV · Automation
             </div>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/40 grid place-items-center">
-            <Cpu className="w-4.5 h-4.5 text-accent" />
-          </div>
+          <img
+            src={primewaveLogo.url}
+            alt="Primewave AI Solutions"
+            className="h-10 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+          />
         </div>
       </div>
     </header>
