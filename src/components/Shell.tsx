@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Pizza, Cpu } from "lucide-react";
 
-const tabs = [
+const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
   { to: "/statistics", label: "Statistics" },
   { to: "/schedules", label: "Schedules" },
-] as const;
+];
 
 export function Header() {
   return (
