@@ -416,11 +416,6 @@ function ClimateCard({
 }
 
 function CameraTile({ cam }: { cam: HAState }) {
-  const [tick, setTick] = useState(Date.now());
-  useEffect(() => {
-    const i = setInterval(() => setTick(Date.now()), 3000);
-    return () => clearInterval(i);
-  }, []);
   return (
     <div className="rounded-2xl overflow-hidden border border-border bg-gradient-card shadow-soft">
       <div className="flex items-center justify-between p-4 border-b border-border">
@@ -438,16 +433,10 @@ function CameraTile({ cam }: { cam: HAState }) {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => setTick(Date.now())}
-          className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary"
-        >
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
       </div>
       <div className="relative aspect-video bg-black">
         <img
-          src={`/api/camera/${cam.entity_id}?t=${tick}`}
+          src={`/api/camera/${cam.entity_id}?stream=1`}
           alt={cam.entity_id}
           className="w-full h-full object-cover"
           onError={(e) => {
@@ -458,3 +447,4 @@ function CameraTile({ cam }: { cam: HAState }) {
     </div>
   );
 }
+
