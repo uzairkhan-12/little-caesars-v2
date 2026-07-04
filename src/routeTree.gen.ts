@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatisticsRouteImport } from './routes/statistics'
 import { Route as SchedulesRouteImport } from './routes/schedules'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiHaWsRouteImport } from './routes/api/ha.ws'
 import { Route as ApiCameraEntityRouteImport } from './routes/api/camera.$entity'
@@ -23,6 +24,11 @@ const StatisticsRoute = StatisticsRouteImport.update({
 const SchedulesRoute = SchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,6 +49,7 @@ const ApiCameraEntityRoute = ApiCameraEntityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
@@ -67,15 +76,23 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
     | '/schedules'
     | '/statistics'
     | '/api/camera/$entity'
     | '/api/ha/ws'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/schedules' | '/statistics' | '/api/camera/$entity' | '/api/ha/ws'
+  to:
+    | '/'
+    | '/login'
+    | '/schedules'
+    | '/statistics'
+    | '/api/camera/$entity'
+    | '/api/ha/ws'
   id:
     | '__root__'
     | '/'
+    | '/login'
     | '/schedules'
     | '/statistics'
     | '/api/camera/$entity'
@@ -84,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
   SchedulesRoute: typeof SchedulesRoute
   StatisticsRoute: typeof StatisticsRoute
   ApiCameraEntityRoute: typeof ApiCameraEntityRoute
@@ -104,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/schedules'
       fullPath: '/schedules'
       preLoaderRoute: typeof SchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -132,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
   SchedulesRoute: SchedulesRoute,
   StatisticsRoute: StatisticsRoute,
   ApiCameraEntityRoute: ApiCameraEntityRoute,

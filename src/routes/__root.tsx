@@ -6,7 +6,9 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  redirect,
 } from "@tanstack/react-router";
+import { getGateStatus } from "@/lib/gate.functions";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
