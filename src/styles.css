@@ -75,10 +75,10 @@
   --sidebar-border: oklch(0.24 0.015 40);
   --sidebar-accent: oklch(0.24 0.03 45);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.72 0.19 45), oklch(0.62 0.22 25));
-  --gradient-accent: linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.72 0.19 45));
+  --gradient-brand: linear-gradient(135deg, #ff671b, #d94a00);
+  --gradient-accent: linear-gradient(135deg, oklch(0.82 0.18 85), #ff671b);
   --gradient-card: linear-gradient(160deg, oklch(0.22 0.02 40) 0%, oklch(0.19 0.018 40) 100%);
-  --shadow-glow: 0 20px 60px -20px oklch(0.72 0.19 45 / 0.45);
+  --shadow-glow: 0 20px 60px -20px rgb(255 103 27 / 0.45);
   --shadow-soft: 0 10px 30px -12px oklch(0 0 0 / 0.6);
 }
 
