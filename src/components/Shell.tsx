@@ -85,7 +85,10 @@ export function Shell({
           <div className="flex items-center gap-2">
             <Cpu className="w-3.5 h-3.5 text-accent" />
             <span>
-              Powered by <span className="text-foreground font-medium">Primewave</span>
+              Powered by{" "}
+              <span className="text-foreground">
+                <span className="font-bold">PRIME</span>WAVE AI SOLUTIONS
+              </span>
             </span>
           </div>
           <div>
