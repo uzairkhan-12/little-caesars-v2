@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Pizza, Cpu } from "lucide-react";
+import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 
 const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
