@@ -5,6 +5,7 @@ export const Route = createFileRoute("/api/camera/$entity")({
   server: {
     handlers: {
       GET: async ({ params, request }) => {
+        try { await assertUnlocked(); } catch (r) { return r as Response; }
         const url = process.env.HOME_ASSISTANT_URL;
         const token = process.env.HOME_ASSISTANT_TOKEN;
         if (!url || !token) return new Response("Not configured", { status: 500 });
