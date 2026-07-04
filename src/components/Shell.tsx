@@ -40,7 +40,9 @@ export function Header() {
 
         <div className="flex items-center gap-2.5">
           <div className="leading-tight hidden sm:block text-right">
-            <div className="font-display text-xl tracking-wider">PRIMEWAVE</div>
+            <div className="font-display text-xl tracking-wider">
+              <span className="font-bold">PRIME</span>WAVE AI SOLUTIONS
+            </div>
             <div className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
               CV · Automation
             </div>
