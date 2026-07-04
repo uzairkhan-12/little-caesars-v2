@@ -1,4 +1,4 @@
-import { useSession } from "@tanstack/react-start/server";
+import { getRequestProtocol, useSession } from "@tanstack/react-start/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 export type GateSession = { unlocked?: boolean; user?: string };
@@ -7,14 +7,15 @@ export function getSessionConfig() {
   const password =
     process.env.SESSION_SECRET ??
     "build-time-placeholder-not-used-at-runtime-xxxxxxxxxxxxxxxxxxxx";
+  const isHttps = getRequestProtocol({ xForwardedProto: true }) === "https";
   return {
     password,
     name: "lc-gate",
     maxAge: 60 * 60 * 24 * 7,
     cookie: {
       httpOnly: true,
-      secure: true,
-      sameSite: "none" as const,
+      secure: isHttps,
+      sameSite: isHttps ? ("none" as const) : ("lax" as const),
       path: "/",
     },
   };
