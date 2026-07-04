@@ -127,18 +127,22 @@ export function Shell({
         )}
         {children}
       </main>
-      <footer className="border-t border-border mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <img src={primewaveLogo.url} alt="" className="h-10 w-auto object-contain" />
-            <span>
+      <footer className="border-t border-border mt-16 bg-card/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <img
+              src={primewaveLogo.url}
+              alt="Primewave AI Solutions"
+              className="h-12 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.35)]"
+            />
+            <span className="text-xs text-muted-foreground">
               Powered by{" "}
               <span className="text-foreground">
                 <span className="font-bold">PRIME</span>WAVE AI SOLUTIONS
               </span>
             </span>
           </div>
-          <div>
+          <div className="text-xs text-muted-foreground">
             Support &amp; info:{" "}
             <a
               href="mailto:info@primewave.ai"
