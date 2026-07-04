@@ -26,20 +26,30 @@ export function Header() {
   };
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
-        <img
-          src={littleCaesarsLogo.url}
-          alt="Little Caesars"
-          className="h-10 w-auto object-contain"
-        />
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 py-2 sm:h-16 sm:py-0 flex flex-col sm:flex-row items-center sm:justify-between gap-2 sm:gap-4">
+        <div className="w-full sm:w-auto flex items-center justify-between gap-3">
+          <img
+            src={littleCaesarsLogo.url}
+            alt="Little Caesars"
+            className="h-8 sm:h-10 w-auto object-contain shrink-0"
+          />
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="sm:hidden h-8 w-8 rounded-full bg-card/70 border border-border grid place-items-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
 
-        <nav className="flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
+        <nav className="flex items-center gap-1 rounded-full bg-card/70 border border-border p-1 max-w-full overflow-x-auto">
           {tabs.map((t) => (
             <Link
               key={t.to}
               to={t.to}
               activeOptions={{ exact: t.exact ?? false }}
-              className="px-4 sm:px-5 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+              className="px-3 sm:px-5 py-1.5 text-[11px] sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
             >
               {t.label}
             </Link>
@@ -50,10 +60,10 @@ export function Header() {
           onClick={handleLogout}
           aria-label="Sign out"
           title="Sign out"
-          className="h-9 px-3 rounded-full bg-card/70 border border-border inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
+          className="hidden sm:inline-flex h-9 px-3 rounded-full bg-card/70 border border-border items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
         >
           <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Sign out</span>
+          <span>Sign out</span>
         </button>
       </div>
     </header>
