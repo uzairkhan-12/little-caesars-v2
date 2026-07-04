@@ -129,17 +129,15 @@ export function Shell({
       </main>
       <footer className="border-t border-border mt-16 bg-card/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex flex-col items-center sm:items-start gap-2">
+            <span className="text-xs text-muted-foreground">Powered by</span>
             <img
               src={primewaveLogo.url}
               alt="Primewave AI Solutions"
               className="h-12 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.35)]"
             />
-            <span className="text-xs text-muted-foreground">
-              Powered by{" "}
-              <span className="text-foreground">
-                <span className="font-bold">PRIME</span>WAVE AI SOLUTIONS
-              </span>
+            <span className="text-xs text-foreground tracking-wider">
+              <span className="font-bold">PRIME</span>WAVE AI SOLUTIONS
             </span>
           </div>
           <div className="text-xs text-muted-foreground">
