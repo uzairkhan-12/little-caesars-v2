@@ -1,8 +1,8 @@
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
-import type { ReactNode } from "react";
+import { LogOut, Menu, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 import { logout } from "@/lib/gate.functions";
 import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
@@ -18,38 +18,37 @@ export function Header() {
   const router = useRouter();
   const qc = useQueryClient();
   const logoutFn = useServerFn(logout);
+  const [open, setOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   const handleLogout = async () => {
+    setOpen(false);
     await qc.cancelQueries();
     qc.clear();
     await logoutFn();
     router.navigate({ to: "/login", replace: true });
   };
+
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 py-2 sm:h-16 sm:py-0 flex flex-col sm:flex-row items-center sm:justify-between gap-2 sm:gap-4">
-        <div className="w-full sm:w-auto flex items-center justify-between gap-3">
-          <img
-            src={littleCaesarsLogo.url}
-            alt="Little Caesars"
-            className="h-8 sm:h-10 w-auto object-contain shrink-0"
-          />
-          <button
-            onClick={handleLogout}
-            aria-label="Sign out"
-            title="Sign out"
-            className="sm:hidden h-8 w-8 rounded-full bg-card/70 border border-border grid place-items-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition shrink-0"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center justify-between gap-4">
+        <img
+          src={littleCaesarsLogo.url}
+          alt="Little Caesars"
+          className="h-8 sm:h-10 w-auto object-contain shrink-0"
+        />
 
-        <nav className="flex items-center gap-1 rounded-full bg-card/70 border border-border p-1 max-w-full overflow-x-auto">
+        <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
           {tabs.map((t) => (
             <Link
               key={t.to}
               to={t.to}
               activeOptions={{ exact: t.exact ?? false }}
-              className="px-3 sm:px-5 py-1.5 text-[11px] sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+              className="px-4 sm:px-5 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
             >
               {t.label}
             </Link>
@@ -65,7 +64,41 @@ export function Header() {
           <LogOut className="w-4 h-4" />
           <span>Sign out</span>
         </button>
+
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition shrink-0"
+        >
+          {open ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+        </button>
       </div>
+
+      {open && (
+        <div className="sm:hidden border-t border-border bg-background/95 backdrop-blur-md">
+          <nav className="px-3 py-3 flex flex-col gap-1">
+            {tabs.map((t) => (
+              <Link
+                key={t.to}
+                to={t.to}
+                activeOptions={{ exact: t.exact ?? false }}
+                onClick={() => setOpen(false)}
+                className="px-4 py-2.5 text-sm font-medium uppercase tracking-wider rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/70 transition-colors data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+              >
+                {t.label}
+              </Link>
+            ))}
+            <button
+              onClick={handleLogout}
+              className="mt-1 px-4 py-2.5 text-sm font-medium uppercase tracking-wider rounded-lg bg-card/70 border border-border inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign out</span>
+            </button>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
