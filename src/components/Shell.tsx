@@ -46,23 +46,15 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
-          <img
-            src={primewaveLogo.url}
-            alt="Primewave AI Solutions"
-            className="h-10 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.35)]"
-          />
-          <div className="h-8 w-px bg-border" aria-hidden />
-          <button
-            onClick={handleLogout}
-            aria-label="Sign out"
-            title="Sign out"
-            className="h-9 px-3 rounded-lg bg-card border border-border inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          aria-label="Sign out"
+          title="Sign out"
+          className="h-9 px-3 rounded-full bg-card/70 border border-border inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">Sign out</span>
+        </button>
       </div>
     </header>
   );
