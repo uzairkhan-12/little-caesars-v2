@@ -25,6 +25,7 @@ export type HAState = {
 };
 
 export const getStates = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
   const res = await haFetch("/api/states");
   if (!res.ok) throw new Error(`HA states failed: ${res.status}`);
   const data = (await res.json()) as HAState[];
