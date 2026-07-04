@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertUnlocked } from "./gate.functions";
 
 function haFetch(path: string, init?: RequestInit) {
   const url = process.env.HOME_ASSISTANT_URL;
