@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Clock, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { Toggle } from "@/components/Toggle";
 import { getStates, callService } from "@/lib/ha.functions";
 
 export const Route = createFileRoute("/schedules")({ component: SchedulesPage });
@@ -70,18 +71,8 @@ function SchedulesPage() {
                     <div className="text-[11px] text-muted-foreground">{a.entity_id}</div>
                   </div>
                 </div>
-                <button
-                  onClick={() => toggle.mutate({ entity_id: a.entity_id, on: !on })}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    on ? "bg-primary" : "bg-muted"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      on ? "translate-x-6" : "translate-x-0.5"
-                    }`}
-                  />
-                </button>
+                <Toggle on={on} onChange={(next) => toggle.mutate({ entity_id: a.entity_id, on: next })} label={a.entity_id} />
+
               </div>
               <div className="mt-4 text-xs text-muted-foreground">
                 Last triggered:{" "}

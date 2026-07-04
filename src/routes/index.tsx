@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService } from "@/lib/ha.functions";
 
@@ -162,19 +163,12 @@ function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => toggle.mutate({ entity_id: l.entity_id, on: !on })}
-                    aria-pressed={on}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      on ? "bg-primary" : "bg-muted"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                        on ? "translate-x-6" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
+                  <Toggle
+                    on={on}
+                    onChange={(next) => toggle.mutate({ entity_id: l.entity_id, on: next })}
+                    label={l.attributes.friendly_name ?? l.entity_id}
+                  />
+
                 </div>
               );
             })}
