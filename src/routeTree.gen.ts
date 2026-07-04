@@ -11,9 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatisticsRouteImport } from './routes/statistics'
 import { Route as SchedulesRouteImport } from './routes/schedules'
-import { Route as LightsRouteImport } from './routes/lights'
-import { Route as ClimateRouteImport } from './routes/climate'
-import { Route as CameraRouteImport } from './routes/camera'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiCameraEntityRouteImport } from './routes/api/camera.$entity'
 
@@ -25,21 +22,6 @@ const StatisticsRoute = StatisticsRouteImport.update({
 const SchedulesRoute = SchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LightsRoute = LightsRouteImport.update({
-  id: '/lights',
-  path: '/lights',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClimateRoute = ClimateRouteImport.update({
-  id: '/climate',
-  path: '/climate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CameraRoute = CameraRouteImport.update({
-  id: '/camera',
-  path: '/camera',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,18 +37,12 @@ const ApiCameraEntityRoute = ApiCameraEntityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/camera': typeof CameraRoute
-  '/climate': typeof ClimateRoute
-  '/lights': typeof LightsRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/camera': typeof CameraRoute
-  '/climate': typeof ClimateRoute
-  '/lights': typeof LightsRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
@@ -74,48 +50,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/camera': typeof CameraRoute
-  '/climate': typeof ClimateRoute
-  '/lights': typeof LightsRoute
   '/schedules': typeof SchedulesRoute
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/camera'
-    | '/climate'
-    | '/lights'
-    | '/schedules'
-    | '/statistics'
-    | '/api/camera/$entity'
+  fullPaths: '/' | '/schedules' | '/statistics' | '/api/camera/$entity'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/camera'
-    | '/climate'
-    | '/lights'
-    | '/schedules'
-    | '/statistics'
-    | '/api/camera/$entity'
-  id:
-    | '__root__'
-    | '/'
-    | '/camera'
-    | '/climate'
-    | '/lights'
-    | '/schedules'
-    | '/statistics'
-    | '/api/camera/$entity'
+  to: '/' | '/schedules' | '/statistics' | '/api/camera/$entity'
+  id: '__root__' | '/' | '/schedules' | '/statistics' | '/api/camera/$entity'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CameraRoute: typeof CameraRoute
-  ClimateRoute: typeof ClimateRoute
-  LightsRoute: typeof LightsRoute
   SchedulesRoute: typeof SchedulesRoute
   StatisticsRoute: typeof StatisticsRoute
   ApiCameraEntityRoute: typeof ApiCameraEntityRoute
@@ -137,27 +85,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SchedulesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lights': {
-      id: '/lights'
-      path: '/lights'
-      fullPath: '/lights'
-      preLoaderRoute: typeof LightsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/climate': {
-      id: '/climate'
-      path: '/climate'
-      fullPath: '/climate'
-      preLoaderRoute: typeof ClimateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/camera': {
-      id: '/camera'
-      path: '/camera'
-      fullPath: '/camera'
-      preLoaderRoute: typeof CameraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -177,9 +104,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CameraRoute: CameraRoute,
-  ClimateRoute: ClimateRoute,
-  LightsRoute: LightsRoute,
   SchedulesRoute: SchedulesRoute,
   StatisticsRoute: StatisticsRoute,
   ApiCameraEntityRoute: ApiCameraEntityRoute,
