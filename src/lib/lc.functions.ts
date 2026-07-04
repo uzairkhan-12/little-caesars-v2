@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertUnlocked } from "./gate.functions";
 
 function lcUrl(path: string) {
   const base = process.env.LCLOGIC_URL ?? "https://lclogic.primewave2.tech";
