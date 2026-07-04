@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertUnlocked } from "./gate.functions";
 
 function lcUrl(path: string) {
   const base = process.env.LCLOGIC_URL ?? "https://lclogic.primewave2.tech";
@@ -25,17 +26,20 @@ export type EventRow = {
   kind: "entry" | "exit" | "visit";
 };
 
-export const getCounts = createServerFn({ method: "GET" }).handler(() =>
-  safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
-);
+export const getCounts = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
+  return safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 });
+});
 
-export const getToday = createServerFn({ method: "GET" }).handler(() =>
-  safeJson<Today>("/api/today", { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, visits: 0 }),
-);
+export const getToday = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
+  return safeJson<Today>("/api/today", { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, visits: 0 });
+});
 
 export const getEvents = createServerFn({ method: "GET" })
   .inputValidator((d: { limit?: number; kind?: string }) => d)
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
+    await assertUnlocked();
     const params = new URLSearchParams();
     params.set("limit", String(data.limit ?? 50));
     if (data.kind) params.set("kind", data.kind);
@@ -43,6 +47,7 @@ export const getEvents = createServerFn({ method: "GET" })
   });
 
 export const getSummary = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
   const [counts, today, events] = await Promise.all([
     safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
     safeJson<Today>("/api/today", {

@@ -1,6 +1,10 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
+import { logout } from "@/lib/gate.functions";
 import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
 
@@ -11,6 +15,15 @@ const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
 ];
 
 export function Header() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const logoutFn = useServerFn(logout);
+  const handleLogout = async () => {
+    await qc.cancelQueries();
+    qc.clear();
+    await logoutFn();
+    router.navigate({ to: "/login", replace: true });
+  };
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
@@ -19,7 +32,6 @@ export function Header() {
           alt="Little Caesars"
           className="h-10 w-auto object-contain"
         />
-
 
         <nav className="flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
           {tabs.map((t) => (
@@ -34,7 +46,14 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            className="w-9 h-9 rounded-lg bg-card border border-border grid place-items-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
           <img
             src={primewaveLogo.url}
             alt="Primewave AI Solutions"

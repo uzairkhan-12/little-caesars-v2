@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertUnlocked } from "./gate.functions";
 
 function haFetch(path: string, init?: RequestInit) {
   const url = process.env.HOME_ASSISTANT_URL;
@@ -24,6 +25,7 @@ export type HAState = {
 };
 
 export const getStates = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
   const res = await haFetch("/api/states");
   if (!res.ok) throw new Error(`HA states failed: ${res.status}`);
   const data = (await res.json()) as HAState[];
@@ -35,6 +37,7 @@ export const callService = createServerFn({ method: "POST" })
     (d: { domain: string; service: string; entity_id?: string; data?: Record<string, unknown> }) => d,
   )
   .handler(async ({ data }) => {
+    await assertUnlocked();
     const body = { ...(data.data ?? {}), ...(data.entity_id ? { entity_id: data.entity_id } : {}) };
     const res = await haFetch(`/api/services/${data.domain}/${data.service}`, {
       method: "POST",
@@ -47,6 +50,7 @@ export const callService = createServerFn({ method: "POST" })
 export const getHistory = createServerFn({ method: "GET" })
   .inputValidator((d: { entity_id: string; hours?: number }) => d)
   .handler(async ({ data }) => {
+    await assertUnlocked();
     const hours = data.hours ?? 24;
     const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
     const res = await haFetch(
