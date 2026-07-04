@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { assertUnlocked } from "@/lib/gate.functions";
 
 export const Route = createFileRoute("/api/camera/$entity")({
   server: {
