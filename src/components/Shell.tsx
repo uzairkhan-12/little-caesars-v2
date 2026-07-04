@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Pizza } from "lucide-react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
+import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
 
 const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
@@ -14,17 +14,12 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-brand grid place-items-center shadow-glow">
-            <Pizza className="w-4.5 h-4.5 text-primary-foreground" />
-          </div>
-          <div className="leading-tight hidden sm:block">
-            <div className="font-display text-xl tracking-wider">LITTLE CAESARS</div>
-            <div className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
-              Command · v2
-            </div>
-          </div>
-        </div>
+        <img
+          src={littleCaesarsLogo.url}
+          alt="Little Caesars"
+          className="h-10 w-auto object-contain"
+        />
+
 
         <nav className="flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
           {tabs.map((t) => (
