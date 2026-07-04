@@ -25,6 +25,13 @@ function safeEqual(a: string, b: string) {
   const hb = createHash("sha256").update(b, "utf8").digest();
   return timingSafeEqual(ha, hb);
 }
+export async function assertUnlocked() {
+  const session = await useSession<GateSession>(getSessionConfig());
+  if (!session.data.unlocked) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+}
+
 
 export const getGateStatus = createServerFn({ method: "GET" }).handler(async () => {
   const session = await useSession<GateSession>(getSessionConfig());
