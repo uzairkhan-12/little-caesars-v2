@@ -10,6 +10,7 @@ export const Route = createFileRoute("/api/ha/ws")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        try { await assertUnlocked(); } catch (r) { return r as Response; }
         if (request.headers.get("Upgrade") !== "websocket") {
           return new Response("Expected WebSocket upgrade", { status: 426 });
         }
