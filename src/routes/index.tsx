@@ -170,7 +170,7 @@ function Home() {
         </div>
 
         <div className="lg:col-span-2">
-          <SectionHeader title="Live camera" hint="Frigate stream · 3s refresh" />
+          <SectionHeader title="Live camera" hint="MJPEG live stream" />
           {cameras[0] ? <CameraTile cam={cameras[0]} /> : <EmptyCard label="No camera" />}
         </div>
       </section>
