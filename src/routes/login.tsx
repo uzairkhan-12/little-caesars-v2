@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Lock, User, Loader2 } from "lucide-react";
-import { login, getGateStatus } from "@/lib/gate.functions";
+import { login } from "@/lib/gate.functions";
 import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
 
@@ -13,12 +13,9 @@ export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>): Search => ({
     redirect: typeof s.redirect === "string" ? s.redirect : undefined,
   }),
-  loader: async () => {
-    const status = await getGateStatus();
-    return status;
-  },
   component: LoginPage,
 });
+
 
 function LoginPage() {
   const router = useRouter();
