@@ -52,8 +52,8 @@
   --card-foreground: oklch(0.97 0.015 80);
   --popover: oklch(0.21 0.018 40);
   --popover-foreground: oklch(0.97 0.015 80);
-  /* Little Caesars orange */
-  --primary: oklch(0.72 0.19 45);
+  /* Primewave brand orange #FF671B */
+  --primary: #ff671b;
   --primary-foreground: oklch(0.16 0.02 40);
   --secondary: oklch(0.28 0.02 40);
   --secondary-foreground: oklch(0.97 0.015 80);
