@@ -335,21 +335,31 @@ function ClimateCard({
   const modes = attrs.hvac_modes ?? ["off", "cool", "heat", "fan_only", "dry"];
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
+  const cool = mode === "cool";
+
+  const accentText = cool ? "text-sky-400" : "text-primary";
+  const accentBg = cool ? "bg-sky-500/20 text-sky-300" : "bg-primary/20 text-primary";
+  const accentBorder = cool ? "border-sky-400/50" : "border-primary/40";
+  const accentGradient = cool
+    ? "bg-gradient-to-br from-sky-500/15 via-sky-500/5 to-transparent"
+    : "bg-gradient-card";
+  const modePillOn = cool ? "bg-sky-500 text-white" : "bg-primary text-primary-foreground";
+  const hoverTint = cool ? "hover:bg-sky-500/20 hover:text-sky-300" : "hover:bg-primary/20 hover:text-primary";
 
   return (
     <div
       className={`rounded-2xl border p-5 shadow-soft transition-all ${
-        active ? "bg-gradient-card border-primary/40" : "bg-gradient-card border-border opacity-90"
+        active ? `${accentGradient} ${accentBorder}` : "bg-gradient-card border-border opacity-90"
       }`}
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{mode}</div>
+          <div className={`text-[10px] uppercase tracking-wider ${active && cool ? "text-sky-300/80" : "text-muted-foreground"}`}>{mode}</div>
           <div className="font-display text-lg tracking-wider truncate">
             {attrs.friendly_name ?? c.entity_id}
           </div>
         </div>
-        <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+        <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${active ? accentBg : "bg-muted text-muted-foreground"}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -362,18 +372,18 @@ function ClimateCard({
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onTemp(target - 1)}
-            className="w-8 h-8 rounded-full bg-muted hover:bg-primary/20 hover:text-primary grid place-items-center"
+            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
             aria-label="Decrease"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
           <div className="text-center min-w-[56px]">
             <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
-            <div className="font-display text-2xl text-primary tabular-nums">{target}°</div>
+            <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>{target}°</div>
           </div>
           <button
             onClick={() => onTemp(target + 1)}
-            className="w-8 h-8 rounded-full bg-muted hover:bg-primary/20 hover:text-primary grid place-items-center"
+            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
             aria-label="Increase"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -385,12 +395,14 @@ function ClimateCard({
         {modes.map((m) => {
           const MI = modeIcons[m] ?? Sun;
           const on = m === mode;
+          const isCoolPill = m === "cool";
+          const onClass = isCoolPill ? "bg-sky-500 text-white" : modePillOn;
           return (
             <button
               key={m}
               onClick={() => onMode(m)}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
-                on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                on ? onClass : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
               <MI className="w-3 h-3" />
