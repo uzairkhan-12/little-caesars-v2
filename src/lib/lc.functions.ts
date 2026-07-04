@@ -47,6 +47,7 @@ export const getEvents = createServerFn({ method: "GET" })
   });
 
 export const getSummary = createServerFn({ method: "GET" }).handler(async () => {
+  await assertUnlocked();
   const [counts, today, events] = await Promise.all([
     safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
     safeJson<Today>("/api/today", {
