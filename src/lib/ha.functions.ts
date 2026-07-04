@@ -17,7 +17,8 @@ function haFetch(path: string, init?: RequestInit) {
 export type HAState = {
   entity_id: string;
   state: string;
-  attributes: Record<string, unknown> & { friendly_name?: string };
+  // JSON-safe: HA attributes are always JSON-serializable
+  attributes: { friendly_name?: string; [key: string]: string | number | boolean | null | undefined | string[] | number[] };
   last_changed: string;
   last_updated: string;
 };

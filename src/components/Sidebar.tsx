@@ -9,14 +9,15 @@ import {
   Pizza,
 } from "lucide-react";
 
-const nav = [
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+const nav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/lights", label: "Lights & Switches", icon: Lightbulb },
   { to: "/climate", label: "Climate", icon: Snowflake },
   { to: "/camera", label: "Camera", icon: Video },
   { to: "/statistics", label: "Statistics", icon: BarChart3 },
   { to: "/schedules", label: "Schedules", icon: Clock },
-] as const;
+];
 
 export function Sidebar() {
   return (
