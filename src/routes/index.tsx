@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService } from "@/lib/ha.functions";
 
