@@ -18,7 +18,6 @@ import {
   Plus,
   Zap,
   Thermometer,
-  RefreshCw,
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Toggle } from "@/components/Toggle";
