@@ -1,6 +1,10 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
+import { logout } from "@/lib/gate.functions";
 import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
 
