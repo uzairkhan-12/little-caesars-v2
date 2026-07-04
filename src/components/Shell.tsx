@@ -63,6 +63,7 @@ export function Shell({
   title?: string;
   subtitle?: string;
 }) {
+  useHAWebSocket();
   return (
     <div className="min-h-screen bg-background">
       <Header />
