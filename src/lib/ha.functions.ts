@@ -50,6 +50,7 @@ export const callService = createServerFn({ method: "POST" })
 export const getHistory = createServerFn({ method: "GET" })
   .inputValidator((d: { entity_id: string; hours?: number }) => d)
   .handler(async ({ data }) => {
+    await assertUnlocked();
     const hours = data.hours ?? 24;
     const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
     const res = await haFetch(
