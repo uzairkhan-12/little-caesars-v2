@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { assertUnlocked } from "@/lib/gate.functions";
 
 // Cloudflare Workers globals
 declare const WebSocketPair: {
