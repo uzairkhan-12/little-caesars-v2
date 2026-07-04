@@ -37,6 +37,7 @@ export const callService = createServerFn({ method: "POST" })
     (d: { domain: string; service: string; entity_id?: string; data?: Record<string, unknown> }) => d,
   )
   .handler(async ({ data }) => {
+    await assertUnlocked();
     const body = { ...(data.data ?? {}), ...(data.entity_id ? { entity_id: data.entity_id } : {}) };
     const res = await haFetch(`/api/services/${data.domain}/${data.service}`, {
       method: "POST",
