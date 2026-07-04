@@ -74,12 +74,19 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   beforeLoad: async ({ location }) => {
+    if (typeof window === "undefined") return;
     if (location.pathname === "/login") return;
-    const status = await getGateStatus();
-    if (!status.unlocked) {
+    try {
+      const status = await getGateStatus();
+      if (!status.unlocked) {
+        throw redirect({ to: "/login", search: { redirect: location.href } });
+      }
+    } catch (e) {
+      if (e && typeof e === "object" && "isRedirect" in e) throw e;
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
+
   head: () => ({
     meta: [
       { charSet: "utf-8" },
