@@ -653,7 +653,7 @@ function HourlyChart({
                 <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
                   <div className="w-2 rounded-t bg-primary" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
                   <div className="w-2 rounded-t bg-accent" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
-                  <div className="w-2 rounded-t bg-muted-foreground/35" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
+                  <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
                 </div>
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
@@ -667,7 +667,7 @@ function HourlyChart({
       <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> Entries</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent" /> Exits</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/35" /> Visits</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Visits</span>
       </div>
     </div>
   );
@@ -703,7 +703,7 @@ function DailyChart({
             <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
               <div className="w-full flex-1 flex items-end justify-center">
                 <div
-                  className="w-full max-w-5 rounded-t bg-primary/80 hover:bg-primary transition-colors"
+                  className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
                   style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
                   title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
                 />

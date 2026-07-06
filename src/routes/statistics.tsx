@@ -183,7 +183,7 @@ function StackedChart({
               <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
                 <div className="w-2 rounded-t bg-success" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
                 <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
-                <div className="w-2 rounded-t bg-muted-foreground/35" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
+                <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
               </div>
             </div>
             <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
@@ -207,7 +207,7 @@ function Legend() {
         <span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Exits
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/35" /> Visits
+        <span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Visits
       </span>
     </div>
   );
