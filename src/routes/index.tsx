@@ -215,8 +215,25 @@ function Home() {
         )}
       </section>
 
+      {/* Traffic charts */}
+      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader
+            title="Today by hour"
+            hint="entries · exits · visits"
+            inline
+          />
+          <HourlyChart hourly={s?.hourly ?? []} />
+        </div>
+        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader title="Last 14 days" hint="visits" inline />
+          <DailyChart days={daily.data?.days ?? []} />
+        </div>
+      </section>
+
       {/* Zones + energy summary */}
       <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
         <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <SectionHeader title="Zone occupancy" hint="Live from Frigate" inline />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
