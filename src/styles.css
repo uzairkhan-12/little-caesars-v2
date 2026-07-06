@@ -65,8 +65,8 @@
   --destructive-foreground: oklch(0.98 0.01 240);
   --success: oklch(0.72 0.16 200);
   --success-foreground: oklch(0.14 0.02 240);
-  --warning: oklch(0.78 0.14 230);
-  --warning-foreground: oklch(0.18 0.02 240);
+  --warning: oklch(0.75 0.18 55); /* orange */
+  --warning-foreground: oklch(0.18 0.02 40);
   --border: oklch(0.3 0.015 240);
   --input: oklch(0.26 0.015 240);
   --ring: #5eb3ff;
