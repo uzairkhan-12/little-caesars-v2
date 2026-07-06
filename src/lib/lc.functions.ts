@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 // assertUnlocked is dynamically imported inside handlers to keep server-only code out of client bundle
 
 function lcUrl(path: string) {
-  const base = process.env.LCLOGIC_URL ?? "https://lclogic.primewave2.tech";
+  const base = process.env.LCLOGIC_URL ?? "https://lclogic2.primewave2.tech";
   return `${base}${path}`;
 }
 
@@ -18,6 +18,11 @@ async function safeJson<T>(path: string, fallback: T): Promise<T> {
 
 export type Counts = { zones: string[]; counts: Record<string, number>; total: number };
 export type Today = { date: string; entries: number; exits: number; visits: number };
+export type Zones = { zones: string[] };
+export type HourBucket = { hour: number; entries: number; exits: number; visits: number };
+export type Hourly = { date: string; hours: HourBucket[] };
+export type DayBucket = { date: string; entries: number; exits: number; visits: number };
+export type Daily = { since: string; days: DayBucket[] };
 export type EventRow = {
   ts: string;
   event_id: string;
@@ -36,6 +41,28 @@ export const getToday = createServerFn({ method: "GET" }).handler(async () => {
   return safeJson<Today>("/api/today", { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, visits: 0 });
 });
 
+export const getZones = createServerFn({ method: "GET" }).handler(async () => {
+  await (await import("./gate.server")).assertUnlocked();
+  return safeJson<Zones>("/api/zones", { zones: [] });
+});
+
+export const getHourly = createServerFn({ method: "GET" }).handler(async () => {
+  await (await import("./gate.server")).assertUnlocked();
+  const empty: Hourly = {
+    date: new Date().toISOString().slice(0, 10),
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 })),
+  };
+  return safeJson<Hourly>("/api/hourly", empty);
+});
+
+export const getDaily = createServerFn({ method: "GET" })
+  .inputValidator((d: { days?: number }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertUnlocked();
+    const days = data.days ?? 14;
+    return safeJson<Daily>(`/api/daily?days=${days}`, { since: "", days: [] });
+  });
+
 export const getEvents = createServerFn({ method: "GET" })
   .inputValidator((d: { limit?: number; kind?: string }) => d)
   .handler(async ({ data }) => {
@@ -48,7 +75,11 @@ export const getEvents = createServerFn({ method: "GET" })
 
 export const getSummary = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
-  const [counts, today, events] = await Promise.all([
+  const emptyHourly: Hourly = {
+    date: new Date().toISOString().slice(0, 10),
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 })),
+  };
+  const [counts, today, hourly, events] = await Promise.all([
     safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
     safeJson<Today>("/api/today", {
       date: new Date().toISOString().slice(0, 10),
@@ -56,25 +87,9 @@ export const getSummary = createServerFn({ method: "GET" }).handler(async () => 
       exits: 0,
       visits: 0,
     }),
-    safeJson<EventRow[]>("/api/events?limit=200", []),
+    safeJson<Hourly>("/api/hourly", emptyHourly),
+    safeJson<EventRow[]>("/api/events?limit=50", []),
   ]);
 
-  // Hourly buckets for today
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const hours = Array.from({ length: 24 }, (_, h) => ({
-    hour: h,
-    entries: 0,
-    exits: 0,
-    visits: 0,
-  }));
-  for (const e of events) {
-    if (!e.ts.startsWith(todayStr)) continue;
-    const h = new Date(e.ts).getUTCHours();
-    if (e.kind === "entry") hours[h].entries++;
-    else if (e.kind === "exit") hours[h].exits++;
-    else hours[h].visits++;
-  }
-
-  return { counts, today, events: events.slice(0, 20), hourly: hours };
+  return { counts, today, events, hourly: hourly.hours };
 });
