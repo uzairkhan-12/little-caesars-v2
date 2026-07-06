@@ -383,16 +383,13 @@ function ClimateCard({
   const swingMode = attrs.swing_mode;
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
-  const cool = mode === "cool";
 
-  const accentText = cool ? "text-sky-400" : "text-primary";
-  const accentBg = cool ? "bg-sky-500/20 text-sky-300" : "bg-primary/20 text-primary";
-  const accentBorder = cool ? "border-sky-400/50" : "border-primary/40";
-  const accentGradient = cool
-    ? "bg-gradient-to-br from-sky-500/15 via-sky-500/5 to-transparent"
-    : "bg-gradient-card";
-  const modePillOn = cool ? "bg-sky-500 text-white" : "bg-primary text-primary-foreground";
-  const hoverTint = cool ? "hover:bg-sky-500/20 hover:text-sky-300" : "hover:bg-primary/20 hover:text-primary";
+  const accentText = "text-primary";
+  const accentBg = "bg-primary/20 text-primary";
+  const accentBorder = "border-primary/40";
+  const accentGradient = "bg-gradient-to-br from-primary/15 via-primary/5 to-transparent";
+  const modePillOn = "bg-primary text-primary-foreground";
+  const hoverTint = "hover:bg-primary/20 hover:text-primary";
 
   const fmt = (s: string) => s.replace(/_/g, " ");
 
