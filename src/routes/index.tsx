@@ -703,7 +703,7 @@ function DailyChart({
             <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
               <div className="w-full flex-1 flex items-end justify-center">
                 <div
-                  className="w-full max-w-5 rounded-t bg-primary/80 hover:bg-primary transition-colors"
+                  className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
                   style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
                   title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
                 />
