@@ -115,71 +115,70 @@ function Home() {
         </div>
       </section>
 
-      {/* Light + Camera */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          <SectionHeader title="Lighting" />
-          <div className="space-y-3">
-            {lights.map((l) => {
-              const on = l.state === "on";
-              return (
-                <div
-                  key={l.entity_id}
-                  className={`rounded-2xl border p-5 shadow-soft transition-all ${
-                    on ? "bg-gradient-brand border-primary shadow-glow" : "bg-gradient-card border-border"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl grid place-items-center ${on ? "bg-white/20" : "bg-muted"}`}>
-                        <Lightbulb className={`w-6 h-6 ${on ? "text-primary-foreground" : "text-muted-foreground"}`} />
+      {/* Lighting row */}
+      <section className="mt-10">
+        <SectionHeader title="Lighting" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {lights.map((l) => {
+            const on = l.state === "on";
+            return (
+              <div
+                key={l.entity_id}
+                className={`rounded-2xl border p-5 shadow-soft transition-all ${
+                  on ? "bg-gradient-brand border-primary shadow-glow" : "bg-gradient-card border-border"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl grid place-items-center ${on ? "bg-white/20" : "bg-muted"}`}>
+                      <Lightbulb className={`w-6 h-6 ${on ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                    </div>
+                    <div>
+                      <div className={`font-medium ${on ? "text-primary-foreground" : ""}`}>
+                        {l.attributes.friendly_name ?? l.entity_id}
                       </div>
-                      <div>
-                        <div className={`font-medium ${on ? "text-primary-foreground" : ""}`}>
-                          {l.attributes.friendly_name ?? l.entity_id}
-                        </div>
-                        <div className={`text-[11px] ${on ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                          {on ? "On" : "Off"}
-                        </div>
+                      <div className={`text-[11px] ${on ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                        {on ? "On" : "Off"}
                       </div>
                     </div>
-                    <Toggle
-                      on={on}
-                      onChange={(next) =>
-                        call.mutate({
-                          domain: "light",
-                          service: next ? "turn_on" : "turn_off",
-                          entity_id: l.entity_id,
-                        })
-                      }
-                    />
                   </div>
+                  <Toggle
+                    on={on}
+                    onChange={(next) =>
+                      call.mutate({
+                        domain: "light",
+                        service: next ? "turn_on" : "turn_off",
+                        entity_id: l.entity_id,
+                      })
+                    }
+                  />
                 </div>
-              );
-            })}
-            {!lights.length && <EmptyCard label="No lights" />}
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <MiniStat icon={Zap} label="Power" value={power ? `${power.state} W` : "—"} />
-            <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
-            <MiniStat icon={Thermometer} label="Breaker" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
-            <MiniStat icon={Sun} label="Weather" value={weather ? String(weather.state) : "—"} />
-          </div>
+              </div>
+            );
+          })}
+          {!lights.length && <EmptyCard label="No lights" />}
         </div>
 
-        <div className="lg:col-span-2">
-          <SectionHeader title="Live cameras" />
-          {cameras.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {cameras.map((c) => (
-                <CameraTile key={c.entity_id} cam={c} />
-              ))}
-            </div>
-          ) : (
-            <EmptyCard label="No camera" />
-          )}
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MiniStat icon={Zap} label="Power" value={power ? `${power.state} W` : "—"} />
+          <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
+          <MiniStat icon={Thermometer} label="Breaker" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
+          <MiniStat icon={Sun} label="Weather" value={weather ? String(weather.state) : "—"} />
         </div>
+      </section>
+
+      {/* Cameras row */}
+      <section className="mt-10">
+        <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
+        {cameras.length ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {cameras.map((c) => (
+              <CameraTile key={c.entity_id} cam={c} />
+            ))}
+          </div>
+        ) : (
+          <EmptyCard label="No camera" />
+        )}
       </section>
 
       {/* Zones + energy summary */}
