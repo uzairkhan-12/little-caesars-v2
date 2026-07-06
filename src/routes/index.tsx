@@ -401,7 +401,7 @@ function ClimateCard({
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className={`text-[10px] uppercase tracking-wider ${active && cool ? "text-sky-300/80" : "text-muted-foreground"}`}>{mode}</div>
+          <div className={`text-[10px] uppercase tracking-wider ${active ? "text-primary/80" : "text-muted-foreground"}`}>{mode}</div>
           <div className="font-display text-lg tracking-wider truncate">
             {attrs.friendly_name ?? c.entity_id}
           </div>
