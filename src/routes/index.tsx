@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toggle } from "@/components/Toggle";
-import { getSummary } from "@/lib/lc.functions";
+import { getSummary, getDaily } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -49,6 +49,7 @@ const modeIcons: Record<string, typeof Snowflake> = {
 
 function Home() {
   const summaryFn = useServerFn(getSummary);
+  const dailyFn = useServerFn(getDaily);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
   const qc = useQueryClient();
@@ -57,6 +58,11 @@ function Home() {
     queryKey: ["lc", "summary"],
     queryFn: () => summaryFn(),
     refetchInterval: 5000,
+  });
+  const daily = useQuery({
+    queryKey: ["lc", "daily", 14],
+    queryFn: () => dailyFn({ data: { days: 14 } }),
+    refetchInterval: 30000,
   });
   const states = useQuery({
     queryKey: ["ha", "states"],
@@ -209,8 +215,25 @@ function Home() {
         )}
       </section>
 
+      {/* Traffic charts */}
+      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader
+            title="Today by hour"
+            hint="entries · exits · visits"
+            inline
+          />
+          <HourlyChart hourly={s?.hourly ?? []} />
+        </div>
+        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader title="Last 14 days" hint="visits" inline />
+          <DailyChart days={daily.data?.days ?? []} />
+        </div>
+      </section>
+
       {/* Zones + energy summary */}
       <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
         <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <SectionHeader title="Zone occupancy" hint="Live from Frigate" inline />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -603,5 +626,80 @@ function CameraTile({ cam }: { cam: HAState }) {
     </>
   );
 }
+
+function HourlyChart({
+  hourly,
+}: {
+  hourly: Array<{ hour: number; entries: number; exits: number; visits: number }>;
+}) {
+  const rows = hourly.length
+    ? hourly
+    : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
+  const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
+  return (
+    <div>
+      <div className="flex items-end gap-1 h-48 mt-2">
+        {rows.map((h) => {
+          const scale = (v: number) => (v / max) * 100;
+          const total = h.entries + h.exits + h.visits;
+          return (
+            <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
+              <div
+                className="w-full rounded-t overflow-hidden flex flex-col justify-end h-full"
+                title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}
+              >
+                <div className="w-full bg-muted-foreground/25" style={{ height: `${scale(h.visits)}%` }} />
+                <div className="w-full bg-accent" style={{ height: `${scale(h.exits)}%` }} />
+                <div className="w-full bg-primary" style={{ height: `${scale(h.entries)}%` }} />
+              </div>
+              <div className="text-[9px] text-muted-foreground tabular-nums">
+                {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
+              </div>
+              <span className="sr-only">{total} events at hour {h.hour}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-4 mt-3 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-primary" /> Entries</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-accent" /> Exits</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-muted-foreground/25" /> Visits</span>
+      </div>
+    </div>
+  );
+}
+
+function DailyChart({
+  days,
+}: {
+  days: Array<{ date: string; entries: number; exits: number; visits: number }>;
+}) {
+  if (!days.length) {
+    return <div className="h-48 grid place-items-center text-xs text-muted-foreground">No data yet</div>;
+  }
+  const max = Math.max(1, ...days.map((d) => d.visits));
+  return (
+    <div>
+      <div className="flex items-end gap-1.5 h-48 mt-2">
+        {days.map((d) => {
+          const h = (d.visits / max) * 100;
+          return (
+            <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
+              <div
+                className="w-full rounded-t bg-primary/80 hover:bg-primary transition-colors"
+                style={{ height: `${Math.max(h, 2)}%` }}
+                title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
+              />
+              <div className="text-[9px] text-muted-foreground tabular-nums">
+                {d.date.slice(5)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 
