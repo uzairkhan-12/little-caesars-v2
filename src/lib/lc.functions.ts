@@ -9,7 +9,7 @@ function lcUrl(path: string) {
 
 async function safeJson<T>(path: string, fallback: T): Promise<T> {
   const url = lcUrl(path);
-  console.log("[lc] GET", url);
+  
   try {
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) {
