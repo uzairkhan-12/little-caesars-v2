@@ -162,17 +162,19 @@ function StackedChart({
 }: {
   hourly: Array<{ hour: number; entries: number; exits: number; visits: number }>;
 }) {
-  const max = Math.max(1, ...hourly.map((h) => h.entries + h.exits + h.visits));
+  const rows = hourly.length
+    ? hourly
+    : Array.from({ length: 24 }, (_, hour) => ({ hour, entries: 0, exits: 0, visits: 0 }));
+  const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
   return (
     <div className="flex items-end gap-1 h-56">
-      {hourly.map((h) => {
+      {rows.map((h) => {
         const t = h.entries + h.exits + h.visits;
         const scale = (v: number) => (v / max) * 100;
         return (
-          <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
+          <div key={h.hour} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
             <div
-              className="w-full rounded-t overflow-hidden flex flex-col justify-end"
-              style={{ height: "100%" }}
+              className="w-full flex-1 rounded-t overflow-hidden flex flex-col justify-end"
               title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}
             >
               <div className="w-full bg-muted-foreground/30" style={{ height: `${scale(h.visits)}%` }} />
