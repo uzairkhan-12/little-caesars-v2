@@ -445,8 +445,7 @@ function ClimateCard({
         {modes.map((m) => {
           const MI = modeIcons[m] ?? Sun;
           const on = m === mode;
-          const isCoolPill = m === "cool";
-          const onClass = isCoolPill ? "bg-sky-500 text-white" : modePillOn;
+          const onClass = modePillOn;
           return (
             <button
               key={m}
