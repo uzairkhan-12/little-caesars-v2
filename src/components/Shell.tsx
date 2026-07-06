@@ -5,8 +5,8 @@ import { LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 import { logout } from "@/lib/gate.functions";
-import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
-import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
+import primewaveLogo from "@/assets/primewave-logo.png";
+import littleCaesarsLogo from "@/assets/little-caesars-logo.png";
 
 const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
@@ -36,11 +36,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center justify-between gap-4">
-        <img
-          src={littleCaesarsLogo.url}
-          alt="Little Caesars"
-          className="h-8 sm:h-10 w-auto object-contain shrink-0"
-        />
+        <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain shrink-0" />
 
         <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
           {tabs.map((t) => (
@@ -131,7 +127,7 @@ export function Shell({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex flex-row items-center gap-3">
             <img
-              src={primewaveLogo.url}
+              src={primewaveLogo}
               alt="Primewave AI Solutions"
               className="h-12 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.35)] shrink-0"
             />

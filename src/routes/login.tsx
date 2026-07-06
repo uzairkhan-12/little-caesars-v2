@@ -4,8 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Lock, User, Loader2 } from "lucide-react";
 import { login } from "@/lib/gate.functions";
-import primewaveLogo from "@/assets/primewave-logo.png.asset.json";
-import littleCaesarsLogo from "@/assets/little-caesars-logo.png.asset.json";
+import primewaveLogo from "@/assets/primewave-logo.png";
+import littleCaesarsLogo from "@/assets/little-caesars-logo.png";
 
 type Search = { redirect?: string };
 
@@ -47,11 +47,7 @@ function LoginPage() {
 
       <div className="relative w-full max-w-md">
         <div className="flex items-center justify-center mb-8">
-          <img
-            src={littleCaesarsLogo.url}
-            alt="Little Caesars"
-            className="h-16 w-auto object-contain"
-          />
+          <img src={littleCaesarsLogo} alt="Little Caesars" className="h-16 w-auto object-contain" />
         </div>
 
         <div className="rounded-3xl border border-border bg-gradient-card shadow-soft p-8">
@@ -125,7 +121,7 @@ function LoginPage() {
 
         <div className="mt-6 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
           <span>Powered by</span>
-          <img src={primewaveLogo.url} alt="Primewave" className="h-4 w-auto" />
+          <img src={primewaveLogo} alt="Primewave" className="h-4 w-auto" />
         </div>
       </div>
     </div>

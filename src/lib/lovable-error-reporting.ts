@@ -1,24 +1,25 @@
-type LovableErrorOptions = {
+type TelemetryErrorOptions = {
   mechanism?: "manual" | "onerror" | "unhandledrejection" | "react_error_boundary";
   handled?: boolean;
   severity?: "error" | "warning" | "info";
 };
 
-type LovableEvents = {
+type TelemetryEvents = {
   captureException?: (
     error: unknown,
     context?: Record<string, unknown>,
-    options?: LovableErrorOptions,
+    options?: TelemetryErrorOptions,
   ) => void;
 };
 
 declare global {
   interface Window {
-    __lovableEvents?: LovableEvents;
+    // keep the existing global to avoid breaking external integrations
+    __lovableEvents?: TelemetryEvents;
   }
 }
 
-export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
+export function reportTelemetryError(error: unknown, context: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
   window.__lovableEvents?.captureException?.(
     error,
@@ -34,3 +35,6 @@ export function reportLovableError(error: unknown, context: Record<string, unkno
     },
   );
 }
+
+// Backwards-compatible export name
+export { reportTelemetryError as reportLovableError };
