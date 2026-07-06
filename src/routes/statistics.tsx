@@ -207,7 +207,7 @@ function Legend() {
         <span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Exits
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/35" /> Visits
+        <span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Visits
       </span>
     </div>
   );
