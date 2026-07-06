@@ -91,9 +91,9 @@ function Home() {
         <SectionHeader title="Live overview" hint="Refreshes every few seconds" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
-          <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="success" />
-          <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="warning" />
-          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="accent" />
+          <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
+          <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
+          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
         </div>
       </section>
 
@@ -383,16 +383,13 @@ function ClimateCard({
   const swingMode = attrs.swing_mode;
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
-  const cool = mode === "cool";
 
-  const accentText = cool ? "text-sky-400" : "text-primary";
-  const accentBg = cool ? "bg-sky-500/20 text-sky-300" : "bg-primary/20 text-primary";
-  const accentBorder = cool ? "border-sky-400/50" : "border-primary/40";
-  const accentGradient = cool
-    ? "bg-gradient-to-br from-sky-500/15 via-sky-500/5 to-transparent"
-    : "bg-gradient-card";
-  const modePillOn = cool ? "bg-sky-500 text-white" : "bg-primary text-primary-foreground";
-  const hoverTint = cool ? "hover:bg-sky-500/20 hover:text-sky-300" : "hover:bg-primary/20 hover:text-primary";
+  const accentText = "text-primary";
+  const accentBg = "bg-primary/20 text-primary";
+  const accentBorder = "border-primary/40";
+  const accentGradient = "bg-gradient-to-br from-primary/15 via-primary/5 to-transparent";
+  const modePillOn = "bg-primary text-primary-foreground";
+  const hoverTint = "hover:bg-primary/20 hover:text-primary";
 
   const fmt = (s: string) => s.replace(/_/g, " ");
 
@@ -404,7 +401,7 @@ function ClimateCard({
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className={`text-[10px] uppercase tracking-wider ${active && cool ? "text-sky-300/80" : "text-muted-foreground"}`}>{mode}</div>
+          <div className={`text-[10px] uppercase tracking-wider ${active ? "text-primary/80" : "text-muted-foreground"}`}>{mode}</div>
           <div className="font-display text-lg tracking-wider truncate">
             {attrs.friendly_name ?? c.entity_id}
           </div>
@@ -448,8 +445,7 @@ function ClimateCard({
         {modes.map((m) => {
           const MI = modeIcons[m] ?? Sun;
           const on = m === mode;
-          const isCoolPill = m === "cool";
-          const onClass = isCoolPill ? "bg-sky-500 text-white" : modePillOn;
+          const onClass = modePillOn;
           return (
             <button
               key={m}
