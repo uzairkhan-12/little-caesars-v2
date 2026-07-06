@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toggle } from "@/components/Toggle";
-import { getSummary } from "@/lib/lc.functions";
+import { getSummary, getDaily } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 
 export const Route = createFileRoute("/")({ component: Home });
