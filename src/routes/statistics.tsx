@@ -82,7 +82,7 @@ function StatisticsPage() {
               </tr>
             </thead>
             <tbody>
-              {events.map((e) => (
+              {events.filter((e) => e.zones && e.zones.length > 0).map((e) => (
                 <tr key={e.event_id} className="border-t border-border/40">
                   <td className="py-2 pr-4 tabular-nums">
                     {new Date(e.ts).toLocaleString()}
