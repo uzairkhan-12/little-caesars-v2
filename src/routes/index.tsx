@@ -25,6 +25,13 @@ import {
 
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
