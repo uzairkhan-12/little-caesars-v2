@@ -345,21 +345,35 @@ function ClimateCard({
   c,
   onTemp,
   onMode,
+  onFan,
+  onSwing,
 }: {
   c: HAState;
   onTemp: (t: number) => void;
   onMode: (m: string) => void;
+  onFan: (f: string) => void;
+  onSwing: (s: string) => void;
 }) {
   const mode = c.state;
   const attrs = c.attributes as {
     temperature?: number;
     current_temperature?: number;
+    current_humidity?: number;
     hvac_modes?: string[];
+    fan_mode?: string;
+    fan_modes?: string[];
+    swing_mode?: string;
+    swing_modes?: string[];
     friendly_name?: string;
   };
   const target = Number(attrs.temperature ?? 22);
   const current = Number(attrs.current_temperature ?? target);
+  const humidity = attrs.current_humidity;
   const modes = attrs.hvac_modes ?? ["off", "cool", "heat", "fan_only", "dry"];
+  const fanModes = attrs.fan_modes ?? [];
+  const swingModes = attrs.swing_modes ?? [];
+  const fanMode = attrs.fan_mode;
+  const swingMode = attrs.swing_mode;
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
   const cool = mode === "cool";
@@ -372,6 +386,8 @@ function ClimateCard({
     : "bg-gradient-card";
   const modePillOn = cool ? "bg-sky-500 text-white" : "bg-primary text-primary-foreground";
   const hoverTint = cool ? "hover:bg-sky-500/20 hover:text-sky-300" : "hover:bg-primary/20 hover:text-primary";
+
+  const fmt = (s: string) => s.replace(/_/g, " ");
 
   return (
     <div
@@ -395,6 +411,9 @@ function ClimateCard({
         <div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Now</div>
           <div className="font-display text-3xl tabular-nums">{current}°</div>
+          {typeof humidity === "number" && (
+            <div className="text-[11px] text-muted-foreground mt-0.5">{humidity}% humidity</div>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -433,11 +452,59 @@ function ClimateCard({
               }`}
             >
               <MI className="w-3 h-3" />
-              {m.replace("_", " ")}
+              {fmt(m)}
             </button>
           );
         })}
       </div>
+
+      {fanModes.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+            <Wind className="w-3 h-3" /> Fan {fanMode ? `· ${fmt(fanMode)}` : ""}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {fanModes.map((f) => {
+              const on = f === fanMode;
+              return (
+                <button
+                  key={f}
+                  onClick={() => onFan(f)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
+                    on ? modePillOn : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {fmt(f)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {swingModes.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">
+            Swing {swingMode ? `· ${fmt(swingMode)}` : ""}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {swingModes.map((s) => {
+              const on = s === swingMode;
+              return (
+                <button
+                  key={s}
+                  onClick={() => onSwing(s)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
+                    on ? modePillOn : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {fmt(s)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
