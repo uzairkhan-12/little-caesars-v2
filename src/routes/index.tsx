@@ -20,6 +20,9 @@ import {
   Plus,
   Zap,
   Thermometer,
+  X,
+  Maximize2,
+
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Toggle } from "@/components/Toggle";
