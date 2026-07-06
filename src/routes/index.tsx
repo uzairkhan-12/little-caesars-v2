@@ -427,35 +427,98 @@ function ClimateCard({
 }
 
 function CameraTile({ cam }: { cam: HAState }) {
+  const [full, setFull] = useState(false);
+
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFull(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [full]);
+
+  const name = cam.attributes.friendly_name ?? cam.entity_id;
+
   return (
-    <div className="rounded-2xl overflow-hidden border border-border bg-gradient-card shadow-soft">
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary grid place-items-center">
-            <Video className="w-5 h-5" />
+    <>
+      <div className="rounded-2xl overflow-hidden border border-border bg-gradient-card shadow-soft">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary grid place-items-center">
+              <Video className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-display text-lg tracking-wider">{name}</div>
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
+                LIVE
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="font-display text-lg tracking-wider">
-              {cam.attributes.friendly_name ?? cam.entity_id}
+          <button
+            onClick={() => setFull(true)}
+            className="w-9 h-9 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary grid place-items-center transition-colors"
+            aria-label="Fullscreen"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFull(true)}
+          className="relative aspect-video bg-black w-full block group"
+          aria-label={`Expand ${name}`}
+        >
+          <img
+            src={`/api/camera/${cam.entity_id}?stream=1`}
+            alt={cam.entity_id}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
+            }}
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
+            <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
+          </div>
+        </button>
+      </div>
+
+      {full && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in"
+          onClick={() => setFull(false)}
+        >
+          <div className="flex items-center justify-between p-4 text-white">
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+              <span className="font-display text-xl tracking-wider">{name}</span>
+              <span className="text-[11px] uppercase tracking-widest text-white/60">Live</span>
             </div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-              LIVE
-            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setFull(false); }}
+              className="w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={`/api/camera/${cam.entity_id}?stream=1`}
+              alt={cam.entity_id}
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+            />
           </div>
         </div>
-      </div>
-      <div className="relative aspect-video bg-black">
-        <img
-          src={`/api/camera/${cam.entity_id}?stream=1`}
-          alt={cam.entity_id}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-          }}
-        />
-      </div>
-    </div>
+      )}
+    </>
   );
 }
+
 
