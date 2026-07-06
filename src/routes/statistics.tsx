@@ -167,41 +167,47 @@ function StackedChart({
     : Array.from({ length: 24 }, (_, hour) => ({ hour, entries: 0, exits: 0, visits: 0 }));
   const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
   return (
-    <div className="flex items-end gap-1 h-56">
+    <div className="relative pt-2">
+      <div className="absolute inset-x-0 top-8 bottom-8 grid grid-rows-4 pointer-events-none">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="border-t border-border/45" />
+        ))}
+      </div>
+      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
       {rows.map((h) => {
         const t = h.entries + h.exits + h.visits;
         const scale = (v: number) => (v / max) * 100;
         return (
-          <div key={h.hour} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
-            <div
-              className="w-full flex-1 rounded-t overflow-hidden flex flex-col justify-end"
-              title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}
-            >
-              <div className="w-full bg-muted-foreground/30" style={{ height: `${scale(h.visits)}%` }} />
-              <div className="w-full bg-warning" style={{ height: `${scale(h.exits)}%` }} />
-              <div className="w-full bg-success" style={{ height: `${scale(h.entries)}%` }} />
+          <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
+            <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}>
+              <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
+                <div className="w-2 rounded-t bg-success" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
+                <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
+                <div className="w-2 rounded-t bg-muted-foreground/35" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
+              </div>
             </div>
-            <div className="text-[9px] text-muted-foreground tabular-nums">
-              {h.hour % 3 === 0 ? h.hour : ""}
+            <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
+              {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
             </div>
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
 
 function Legend() {
   return (
-    <div className="flex gap-4 mt-3 text-[11px] text-muted-foreground">
+    <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-success" /> Entries
+        <span className="w-2.5 h-2.5 rounded-sm bg-success" /> Entries
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-warning" /> Exits
+        <span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Exits
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded bg-muted-foreground/30" /> Visits
+        <span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/35" /> Visits
       </span>
     </div>
   );
