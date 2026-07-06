@@ -643,9 +643,9 @@ function HourlyChart({
           const scale = (v: number) => (v / max) * 100;
           const total = h.entries + h.exits + h.visits;
           return (
-            <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
+            <div key={h.hour} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
               <div
-                className="w-full rounded-t overflow-hidden flex flex-col justify-end h-full"
+                className="w-full flex-1 rounded-t overflow-hidden flex flex-col justify-end"
                 title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}
               >
                 <div className="w-full bg-muted-foreground/25" style={{ height: `${scale(h.visits)}%` }} />
@@ -684,12 +684,14 @@ function DailyChart({
         {days.map((d) => {
           const h = (d.visits / max) * 100;
           return (
-            <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-              <div
-                className="w-full rounded-t bg-primary/80 hover:bg-primary transition-colors"
-                style={{ height: `${Math.max(h, 2)}%` }}
-                title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
-              />
+            <div key={d.date} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
+              <div className="w-full flex-1 flex items-end">
+                <div
+                  className="w-full rounded-t bg-primary/80 hover:bg-primary transition-colors"
+                  style={{ height: `${Math.max(h, 2)}%` }}
+                  title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
+                />
+              </div>
               <div className="text-[9px] text-muted-foreground tabular-nums">
                 {d.date.slice(5)}
               </div>
