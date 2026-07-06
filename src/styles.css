@@ -53,7 +53,7 @@
   --popover: oklch(0.21 0.018 40);
   --popover-foreground: oklch(0.97 0.015 80);
   /* Primewave brand blue */
-  --primary: #2b8dff;
+  --primary: #5eb3ff;
   --primary-foreground: oklch(0.99 0.005 240);
   --secondary: oklch(0.28 0.02 240);
   --secondary-foreground: oklch(0.97 0.015 240);
