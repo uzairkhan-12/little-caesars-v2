@@ -169,8 +169,16 @@ function Home() {
         </div>
 
         <div className="lg:col-span-2">
-          <SectionHeader title="Live camera" />
-          {cameras[0] ? <CameraTile cam={cameras[0]} /> : <EmptyCard label="No camera" />}
+          <SectionHeader title="Live cameras" />
+          {cameras.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {cameras.map((c) => (
+                <CameraTile key={c.entity_id} cam={c} />
+              ))}
+            </div>
+          ) : (
+            <EmptyCard label="No camera" />
+          )}
         </div>
       </section>
 
