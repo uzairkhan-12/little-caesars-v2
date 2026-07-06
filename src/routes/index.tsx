@@ -454,6 +454,7 @@ function ClimateCard({
             <button
               key={m}
               onClick={() => onMode(m)}
+              title={fmt(m)}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
                 on ? onClass : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
@@ -465,51 +466,47 @@ function ClimateCard({
         })}
       </div>
 
-      {fanModes.length > 0 && (
-        <div className="mt-3">
-          <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
-            <Wind className="w-3 h-3" /> Fan {fanMode ? `· ${fmt(fanMode)}` : ""}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {fanModes.map((f) => {
-              const on = f === fanMode;
-              return (
-                <button
-                  key={f}
-                  onClick={() => onFan(f)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
-                    on ? modePillOn : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {fmt(f)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {(fanModes.length > 0 || swingModes.length > 0) && (
+        <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-2 gap-3">
+          {fanModes.length > 0 && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                <Wind className="w-3 h-3" /> Fan
+              </label>
+              <Select value={fanMode ?? ""} onValueChange={onFan}>
+                <SelectTrigger className="h-8 text-xs bg-card border-border capitalize">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fanModes.map((f) => (
+                    <SelectItem key={f} value={f} className="text-xs capitalize">
+                      {fmt(f)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-      {swingModes.length > 0 && (
-        <div className="mt-3">
-          <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">
-            Swing {swingMode ? `· ${fmt(swingMode)}` : ""}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {swingModes.map((s) => {
-              const on = s === swingMode;
-              return (
-                <button
-                  key={s}
-                  onClick={() => onSwing(s)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider transition-colors ${
-                    on ? modePillOn : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {fmt(s)}
-                </button>
-              );
-            })}
-          </div>
+          {swingModes.length > 0 && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                <Activity className="w-3 h-3" /> Swing
+              </label>
+              <Select value={swingMode ?? ""} onValueChange={onSwing}>
+                <SelectTrigger className="h-8 text-xs bg-card border-border capitalize">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {swingModes.map((s) => (
+                    <SelectItem key={s} value={s} className="text-xs capitalize">
+                      {fmt(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       )}
     </div>
