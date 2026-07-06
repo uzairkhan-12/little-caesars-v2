@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
@@ -36,27 +36,7 @@ import { Toggle } from "@/components/Toggle";
 import { getSummary, getDaily } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 
-export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    // run server-side only to prevent direct server requests to the home page
-    if (typeof window !== "undefined") return;
-    const { assertUnlocked } = await import("@/lib/gate.server");
-    try {
-      await assertUnlocked();
-    } catch (e: unknown) {
-      // assertUnlocked throws a Response(401) when unauthorized. Seroval
-      // attempts to serialize thrown Responses which causes errors. Convert
-      // the unauthorized Response into a router redirect to /login instead.
-      // Use a broad check so this is robust in different runtimes.
-      const maybeResp = e as { status?: number } | null;
-      if (maybeResp && maybeResp.status === 401) {
-        throw redirect({ to: "/login" });
-      }
-      throw e;
-    }
-  },
-  component: Home,
-});
+export const Route = createFileRoute("/")({ component: Home });
 
 const modeIcons: Record<string, typeof Snowflake> = {
   cool: Snowflake,

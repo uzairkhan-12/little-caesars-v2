@@ -4,8 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Lock, User, Loader2 } from "lucide-react";
 import { login } from "@/lib/gate.functions";
-import primewaveLogo from "@/assets/primewave-logo.png";
-import littleCaesarsLogo from "@/assets/little-caesars-logo.png";
+import primewaveLogo from "@/assets/primewave-logo.png?url";
+import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
 type Search = { redirect?: string };
 

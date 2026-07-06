@@ -5,8 +5,8 @@ import { LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 import { logout } from "@/lib/gate.functions";
-import primewaveLogo from "@/assets/primewave-logo.png";
-import littleCaesarsLogo from "@/assets/little-caesars-logo.png";
+import primewaveLogo from "@/assets/primewave-logo.png?url";
+import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
 const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Home", exact: true },
