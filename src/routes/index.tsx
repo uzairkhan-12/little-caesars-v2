@@ -91,9 +91,9 @@ function Home() {
         <SectionHeader title="Live overview" hint="Refreshes every few seconds" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
-          <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="success" />
-          <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="warning" />
-          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="accent" />
+          <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
+          <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
+          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
         </div>
       </section>
 
