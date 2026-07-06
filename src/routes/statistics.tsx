@@ -55,15 +55,15 @@ function StatisticsPage() {
         <section className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <h2 className="font-display text-2xl tracking-wider mb-4">Zone totals</h2>
           <ul className="space-y-2">
-            {(summary?.counts.zones ?? []).map((z) => {
-              const c = summary?.counts.counts[z] ?? 0;
-              return (
+            {(summary?.counts.zones ?? [])
+              .map((z) => ({ z, c: summary?.counts.counts[z] ?? 0 }))
+              .filter(({ c }) => c > 0)
+              .map(({ z, c }) => (
                 <li key={z} className="flex justify-between text-sm py-2 border-b border-border/50">
                   <span className="capitalize">{z.replace(/_/g, " ")}</span>
                   <span className="font-semibold tabular-nums">{c}</span>
                 </li>
-              );
-            })}
+              ))}
           </ul>
         </section>
       </div>
