@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 // assertUnlocked is dynamically imported inside handlers to keep server-only code out of client bundle
 
 function lcUrl(path: string) {
-  const base = process.env.LCLOGIC_URL ?? "https://lclogic2.primewave2.tech";
+  const raw = process.env.LCLOGIC_URL ?? "https://lclogic2.primewave2.tech";
+  const base = raw.replace(/\/+$/, "");
   return `${base}${path}`;
 }
 
