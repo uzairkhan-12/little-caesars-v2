@@ -2,16 +2,23 @@ import { createServerFn } from "@tanstack/react-start";
 // assertUnlocked is dynamically imported inside handlers to keep server-only code out of client bundle
 
 function lcUrl(path: string) {
-  const base = process.env.LCLOGIC_URL ?? "https://lclogic2.primewave2.tech";
+  const raw = process.env.LCLOGIC_URL ?? "https://lclogic2.primewave2.tech";
+  const base = raw.replace(/\/+$/, "");
   return `${base}${path}`;
 }
 
 async function safeJson<T>(path: string, fallback: T): Promise<T> {
+  const url = lcUrl(path);
+  
   try {
-    const res = await fetch(lcUrl(path), { headers: { Accept: "application/json" } });
-    if (!res.ok) return fallback;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      console.error("[lc] fetch failed", url, res.status);
+      return fallback;
+    }
     return (await res.json()) as T;
-  } catch {
+  } catch (err) {
+    console.error("[lc] fetch error", url, err);
     return fallback;
   }
 }
