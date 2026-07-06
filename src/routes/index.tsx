@@ -637,22 +637,26 @@ function HourlyChart({
     : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
   const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
   return (
-    <div>
-      <div className="flex items-end gap-1 h-48 mt-2">
+    <div className="relative pt-2">
+      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="border-t border-border/45" />
+        ))}
+      </div>
+      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
         {rows.map((h) => {
           const scale = (v: number) => (v / max) * 100;
           const total = h.entries + h.exits + h.visits;
           return (
-            <div key={h.hour} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
-              <div
-                className="w-full flex-1 rounded-t overflow-hidden flex flex-col justify-end"
-                title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}
-              >
-                <div className="w-full bg-muted-foreground/25" style={{ height: `${scale(h.visits)}%` }} />
-                <div className="w-full bg-accent" style={{ height: `${scale(h.exits)}%` }} />
-                <div className="w-full bg-primary" style={{ height: `${scale(h.entries)}%` }} />
+            <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
+              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}>
+                <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
+                  <div className="w-2 rounded-t bg-primary" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
+                  <div className="w-2 rounded-t bg-accent" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
+                  <div className="w-2 rounded-t bg-muted-foreground/35" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
+                </div>
               </div>
-              <div className="text-[9px] text-muted-foreground tabular-nums">
+              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
                 {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
               </div>
               <span className="sr-only">{total} events at hour {h.hour}</span>
@@ -660,10 +664,10 @@ function HourlyChart({
           );
         })}
       </div>
-      <div className="flex gap-4 mt-3 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-primary" /> Entries</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-accent" /> Exits</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-muted-foreground/25" /> Visits</span>
+      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> Entries</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent" /> Exits</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/35" /> Visits</span>
       </div>
     </div>
   );
@@ -677,23 +681,35 @@ function DailyChart({
   if (!days.length) {
     return <div className="h-48 grid place-items-center text-xs text-muted-foreground">No data yet</div>;
   }
-  const max = Math.max(1, ...days.map((d) => d.visits));
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const rows = Array.from({ length: 14 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (13 - i));
+    const key = date.toISOString().slice(0, 10);
+    return byDate.get(key) ?? { date: key, entries: 0, exits: 0, visits: 0 };
+  });
+  const max = Math.max(1, ...rows.map((d) => d.visits));
   return (
-    <div>
-      <div className="flex items-end gap-1.5 h-48 mt-2">
-        {days.map((d) => {
+    <div className="relative pt-2">
+      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="border-t border-border/45" />
+        ))}
+      </div>
+      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
+        {rows.map((d, index) => {
           const h = (d.visits / max) * 100;
           return (
-            <div key={d.date} className="flex-1 h-full min-w-0 flex flex-col items-center gap-1">
-              <div className="w-full flex-1 flex items-end">
+            <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
+              <div className="w-full flex-1 flex items-end justify-center">
                 <div
-                  className="w-full rounded-t bg-primary/80 hover:bg-primary transition-colors"
-                  style={{ height: `${Math.max(h, 2)}%` }}
+                  className="w-full max-w-5 rounded-t bg-primary/80 hover:bg-primary transition-colors"
+                  style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
                   title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
                 />
               </div>
-              <div className="text-[9px] text-muted-foreground tabular-nums">
-                {d.date.slice(5)}
+              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
+                {index % 3 === 1 || index === rows.length - 1 ? d.date.slice(5) : ""}
               </div>
             </div>
           );
