@@ -57,7 +57,6 @@ function StatisticsPage() {
           <ul className="space-y-2">
             {(summary?.counts.zones ?? [])
               .map((z) => ({ z, c: summary?.counts.counts[z] ?? 0 }))
-              .filter(({ c }) => c > 0)
               .map(({ z, c }) => (
                 <li key={z} className="flex justify-between text-sm py-2 border-b border-border/50">
                   <span className="capitalize">{z.replace(/_/g, " ")}</span>
