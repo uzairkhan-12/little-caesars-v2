@@ -74,15 +74,26 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   beforeLoad: async ({ location }) => {
-    if (typeof window === "undefined") return;
+    // Don't run this check on the login page itself
     if (location.pathname === "/login") return;
+
     try {
       const status = await getGateStatus();
       if (!status.unlocked) {
+        // Router redirect (works both client & server)
         throw redirect({ to: "/login", search: { redirect: location.href } });
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      // If it's already a router redirect, rethrow it
       if (e && typeof e === "object" && "isRedirect" in e) throw e;
+
+      // If gate check threw a Response(401) (server-side), convert to a router redirect
+      const maybeResp = e as { status?: number } | null;
+      if (maybeResp && maybeResp.status === 401) {
+        throw redirect({ to: "/login", search: { redirect: location.href } });
+      }
+
+      // Fallback: redirect to login to avoid showing the app error boundary to unauthenticated users
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
