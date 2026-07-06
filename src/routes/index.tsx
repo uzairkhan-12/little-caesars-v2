@@ -94,7 +94,7 @@ function Home() {
     <Shell>
       {/* KPI row */}
       <section>
-        <SectionHeader title="Live overview" hint="Refreshes every few seconds" />
+        <SectionHeader title="Live overview" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
           <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
