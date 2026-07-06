@@ -114,6 +114,22 @@ function Home() {
                   data: { hvac_mode: m },
                 })
               }
+              onFan={(f) =>
+                call.mutate({
+                  domain: "climate",
+                  service: "set_fan_mode",
+                  entity_id: c.entity_id,
+                  data: { fan_mode: f },
+                })
+              }
+              onSwing={(s) =>
+                call.mutate({
+                  domain: "climate",
+                  service: "set_swing_mode",
+                  entity_id: c.entity_id,
+                  data: { swing_mode: s },
+                })
+              }
             />
           ))}
           {!climates.length && <EmptyCard label="No climate entities" />}
