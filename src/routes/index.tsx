@@ -49,6 +49,7 @@ const modeIcons: Record<string, typeof Snowflake> = {
 
 function Home() {
   const summaryFn = useServerFn(getSummary);
+  const dailyFn = useServerFn(getDaily);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
   const qc = useQueryClient();
@@ -57,6 +58,11 @@ function Home() {
     queryKey: ["lc", "summary"],
     queryFn: () => summaryFn(),
     refetchInterval: 5000,
+  });
+  const daily = useQuery({
+    queryKey: ["lc", "daily", 14],
+    queryFn: () => dailyFn({ data: { days: 14 } }),
+    refetchInterval: 30000,
   });
   const states = useQuery({
     queryKey: ["ha", "states"],
