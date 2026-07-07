@@ -83,6 +83,20 @@ function Home() {
   const breakerTemp = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_temperature");
   const weather = data.find((e) => e.entity_id.startsWith("weather."));
 
+  // Energy monitoring for AC units
+  const energyMap: Record<string, { current: string; power: string; energy: string }> = {
+    "climate.kitchen_1": {
+      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "N/A",
+      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_1")?.state ?? "N/A",
+      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_1")?.state ?? "N/A",
+    },
+    "climate.office": {
+      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "N/A",
+      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_2")?.state ?? "N/A",
+      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_2")?.state ?? "N/A",
+    },
+  };
+
   const s = summary.data;
   const total = s?.counts.total ?? 0;
   const today = s?.today;
@@ -115,11 +129,10 @@ function Home() {
       {/* KPI row */}
       <section>
         <SectionHeader title="Live overview" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
           <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
           <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
-          <StatCard icon={Activity} label="Customers entered" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
         </div>
 
         {/* Small badges for table counters (exclude entrance zones) */}
@@ -160,6 +173,7 @@ function Home() {
             <ClimateCard
               key={c.entity_id}
               c={c}
+              energy={energyMap[c.entity_id]}
               onTemp={(t) =>
                 call.mutate({
                   domain: "climate",
@@ -385,12 +399,14 @@ function ClimateCard({
   onMode,
   onFan,
   onSwing,
+  energy,
 }: {
   c: HAState;
   onTemp: (t: number) => void;
   onMode: (m: string) => void;
   onFan: (f: string) => void;
   onSwing: (s: string) => void;
+  energy?: { current?: string; power?: string; energy?: string };
 }) {
   const mode = c.state;
   const attrs = c.attributes as {
@@ -534,6 +550,23 @@ function ClimateCard({
               </Select>
             </div>
           )}
+        </div>
+      )}
+
+      {energy && (
+        <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-3 gap-2 text-[9px]">
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Current</div>
+            <div className="font-semibold text-sm">{energy.current}</div>
+          </div>
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Power</div>
+            <div className="font-semibold text-sm">{energy.power}</div>
+          </div>
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Energy</div>
+            <div className="font-semibold text-sm">{energy.energy}</div>
+          </div>
         </div>
       )}
     </div>

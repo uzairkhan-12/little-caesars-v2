@@ -52,10 +52,9 @@ function StatisticsPage() {
 
   return (
     <Shell title="Statistics">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Kpi label="Entries" value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
         <Kpi label="Exits" value={totals?.exits ?? 0} icon={ArrowDownRight} tone="warning" />
-        <Kpi label="Visits" value={totals?.visits ?? 0} icon={Activity} tone="primary" />
         <Kpi
           label="Peak hour"
           value={`${String(peak.hour).padStart(2, "0")}:00`}
