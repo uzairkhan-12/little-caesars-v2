@@ -553,22 +553,20 @@ function ClimateCard({
         </div>
       )}
 
-      {energy && (
-        <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-3 gap-2 text-[9px]">
-          <div>
-            <div className="uppercase tracking-wider text-muted-foreground">Current</div>
-            <div className="font-semibold text-sm">{energy.current}</div>
-          </div>
-          <div>
-            <div className="uppercase tracking-wider text-muted-foreground">Power</div>
-            <div className="font-semibold text-sm">{energy.power}</div>
-          </div>
-          <div>
-            <div className="uppercase tracking-wider text-muted-foreground">Energy</div>
-            <div className="font-semibold text-sm">{energy.energy}</div>
-          </div>
+      <div className="mt-4 pt-4 border-t border-border/50 space-y-2 text-[9px]">
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground">Current</span>
+          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? "N/A" : `${parseFloat(energy.current).toFixed(2)} A`}</span>
         </div>
-      )}
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground">Power</span>
+          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${parseFloat(energy.power).toFixed(2)} W`}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground">Energy</span>
+          <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? "N/A" : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
+        </div>
+      </div>
     </div>
   );
 }
