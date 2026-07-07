@@ -108,14 +108,6 @@ function SchedulesPage() {
           <div className="text-sm text-muted-foreground">No automations found.</div>
         )}
       </div>
-
-      <div className="mt-8 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-        <h2 className="font-display text-2xl tracking-wider mb-2">Create new schedule</h2>
-        <p className="text-sm text-muted-foreground">
-          New automations are created in Home Assistant directly (Settings → Automations). Once
-          saved they appear here automatically and can be toggled or triggered from this panel.
-        </p>
-      </div>
     </Shell>
   );
 }

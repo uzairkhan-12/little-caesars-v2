@@ -9,7 +9,7 @@ import primewaveLogo from "@/assets/primewave-logo.png?url";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
 const allTabs: Array<{ to: string; label: string; exact?: boolean; adminOnly?: boolean; employeeOnly?: boolean }> = [
-  { to: "/", label: "Home", exact: true, employeeOnly: true },
+  { to: "/", label: "Home", exact: true },
   { to: "/statistics", label: "Statistics", adminOnly: true },
   { to: "/schedules", label: "Schedules", adminOnly: true },
 ];
