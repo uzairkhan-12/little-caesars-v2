@@ -135,30 +135,24 @@ function Home() {
           <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
         </div>
 
-        {/* Small badges for table counters (exclude entrance zones) */}
-        <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(160px, 1fr))` }}>
+        {/* Small badges for table occupancy status (exclude entrance zones) */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {s?.counts.zones
             .filter((z) => !z.includes("entrance"))
             .map((z) => {
               const count = s.counts.counts[z] ?? 0;
               // friendly label like 'table 1' or 'zone name'
               const label = z.replace(/_/g, " ");
-              const isGray = count === 1;
-              const isGreen = count > 1;
-              const bgColor = isGray 
-                ? 'bg-gray-400 dark:bg-gray-600' 
-                : isGreen 
+              const isOccupied = count > 0;
+              const bgColor = isOccupied 
                 ? 'bg-green-600 dark:bg-green-700' 
                 : 'bg-muted';
-              const textColor = isGray 
-                ? 'text-gray-900 dark:text-gray-100' 
-                : isGreen 
+              const textColor = isOccupied 
                 ? 'text-white' 
                 : 'text-muted-foreground';
               return (
-                <div key={z} className={`flex items-center justify-between px-3 py-2 rounded-md border border-border/30 ${bgColor} ${textColor}`}>
+                <div key={z} className={`px-4 py-2 rounded-md border border-border/30 ${bgColor} ${textColor} text-center`}>
                   <span className="text-xs font-medium capitalize">{label}</span>
-                  <span className="text-sm font-bold">{count}</span>
                 </div>
               );
             })}
@@ -279,15 +273,65 @@ function Home() {
       </section>
 
       {/* Energy section */}
-      <section className="mt-10">
+      <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lights Energy */}
         <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Energy" hint="Smart breaker" inline />
+          <SectionHeader title="Lights Energy" hint="Lighting system" inline />
           <div className="space-y-4">
             <BigMetric label="Power draw" value={power ? `${power.state}` : "0"} unit="W" tone="primary" />
             <BigMetric label="Total energy" value={energy ? `${energy.state}` : "0"} unit="kWh" tone="accent" />
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
               <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
               <MiniStat icon={Thermometer} label="Temp" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
+            </div>
+          </div>
+        </div>
+
+        {/* AC Energy */}
+        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader title="AC Energy" hint="Climate system" inline />
+          <div className="space-y-4">
+            <BigMetric 
+              label="Total Power" 
+              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state 
+                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state).toFixed(2)
+                : "0"} 
+              unit="W" 
+              tone="primary" 
+            />
+            <BigMetric 
+              label="Total Energy" 
+              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state 
+                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state).toFixed(2)
+                : "0"} 
+              unit="kWh" 
+              tone="accent" 
+            />
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/50">
+              <MiniStat 
+                icon={Activity} 
+                label="Current" 
+                value={(() => {
+                  const c1 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "");
+                  const c2 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "");
+                  if (isNaN(c1) && isNaN(c2)) return "—";
+                  return `${((isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2)).toFixed(2)} A`;
+                })()} 
+              />
+              <MiniStat 
+                icon={Activity} 
+                label="Voltage" 
+                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state 
+                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state).toFixed(2)} V` 
+                  : "—"} 
+              />
+              <MiniStat 
+                icon={Thermometer} 
+                label="Temp" 
+                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state 
+                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state).toFixed(1)}°C` 
+                  : "—"} 
+              />
             </div>
           </div>
         </div>
@@ -553,17 +597,17 @@ function ClimateCard({
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-border/50 space-y-2 text-[9px]">
+      <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground">Current</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Current</span>
           <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? "N/A" : `${parseFloat(energy.current).toFixed(2)} A`}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground">Power</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Power</span>
           <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${parseFloat(energy.power).toFixed(2)} W`}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground">Energy</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Energy</span>
           <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? "N/A" : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
         </div>
       </div>
