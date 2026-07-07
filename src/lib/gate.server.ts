@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-start/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 
-export type GateSession = { unlocked?: boolean; user?: string };
+export type GateSession = { unlocked?: boolean; user?: string; role?: "admin" | "employee" };
 
 export function getSessionConfig() {
   const password =
@@ -41,5 +41,12 @@ export async function assertUnlocked() {
   const session = await getGateSession();
   if (!session.data.unlocked) {
     throw new Response("Unauthorized", { status: 401 });
+  }
+}
+
+export async function assertAdmin() {
+  const session = await getGateSession();
+  if (!session.data.unlocked || session.data.role !== "admin") {
+    throw new Response("Forbidden", { status: 403 });
   }
 }

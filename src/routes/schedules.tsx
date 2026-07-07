@@ -1,12 +1,25 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Clock, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Toggle } from "@/components/Toggle";
 import { getStates, callService } from "@/lib/ha.functions";
+import { getGateStatus } from "@/lib/gate.functions";
 
-export const Route = createFileRoute("/schedules")({ component: SchedulesPage });
+export const Route = createFileRoute("/schedules")({
+  beforeLoad: async () => {
+    try {
+      const status = await getGateStatus();
+      if (!status.unlocked || status.role !== "admin") {
+        throw redirect({ to: "/" });
+      }
+    } catch (err) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  component: SchedulesPage,
+});
 
 function SchedulesPage() {
   const statesFn = useServerFn(getStates);

@@ -1,25 +1,38 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
-import { logout } from "@/lib/gate.functions";
+import { logout, getGateStatus } from "@/lib/gate.functions";
 import primewaveLogo from "@/assets/primewave-logo.png?url";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
-const tabs: Array<{ to: string; label: string; exact?: boolean }> = [
-  { to: "/", label: "Home", exact: true },
-  { to: "/statistics", label: "Statistics" },
-  { to: "/schedules", label: "Schedules" },
+const allTabs: Array<{ to: string; label: string; exact?: boolean; adminOnly?: boolean; employeeOnly?: boolean }> = [
+  { to: "/", label: "Home", exact: true, employeeOnly: true },
+  { to: "/statistics", label: "Statistics", adminOnly: true },
+  { to: "/schedules", label: "Schedules", adminOnly: true },
 ];
 
 export function Header() {
   const router = useRouter();
   const qc = useQueryClient();
   const logoutFn = useServerFn(logout);
+  const statusFn = useServerFn(getGateStatus);
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  
+  const { data: status } = useQuery({
+    queryKey: ["gate", "status"],
+    queryFn: () => statusFn(),
+    refetchInterval: 60000,
+  });
+
+  const tabs = allTabs.filter((t) => {
+    if (t.adminOnly && status?.role !== "admin") return false;
+    if (t.employeeOnly && status?.role !== "employee") return false;
+    return true;
+  });
 
   useEffect(() => {
     setOpen(false);
@@ -33,23 +46,40 @@ export function Header() {
     router.navigate({ to: "/login", replace: true });
   };
 
+  // Only show navigation tabs for admins (when tabs array has items)
+  const isAdmin = status?.role === "admin";
+
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center justify-between gap-4">
         <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain shrink-0" />
 
-        <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
-          {tabs.map((t) => (
-            <Link
-              key={t.to}
-              to={t.to}
-              activeOptions={{ exact: t.exact ?? false }}
-              className="px-4 sm:px-5 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+        {/* Show navigation only for admins */}
+        {isAdmin && (
+          <>
+            <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
+              {tabs.map((t) => (
+                <Link
+                  key={t.to}
+                  to={t.to}
+                  activeOptions={{ exact: t.exact ?? false }}
+                  className="px-4 sm:px-5 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+                >
+                  {t.label}
+                </Link>
+              ))}
+            </nav>
+
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-label={open ? "Close menu" : "Open menu"}
+              aria-expanded={open}
+              className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition shrink-0"
             >
-              {t.label}
-            </Link>
-          ))}
-        </nav>
+              {open ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </>
+        )}
 
         <button
           onClick={handleLogout}
@@ -61,17 +91,19 @@ export function Header() {
           <span>Sign out</span>
         </button>
 
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition shrink-0"
-        >
-          {open ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-        </button>
+        {/* Mobile menu button for employees */}
+        {!isAdmin && (
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
-      {open && (
+      {open && isAdmin && (
         <div className="sm:hidden border-t border-border bg-background/95 backdrop-blur-md">
           <nav className="px-3 py-3 flex flex-col gap-1">
             {tabs.map((t) => (

@@ -1,11 +1,24 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { getSummary, getDaily, getEvents } from "@/lib/lc.functions";
+import { getGateStatus } from "@/lib/gate.functions";
 
-export const Route = createFileRoute("/statistics")({ component: StatisticsPage });
+export const Route = createFileRoute("/statistics")({
+  beforeLoad: async () => {
+    try {
+      const status = await getGateStatus();
+      if (!status.unlocked || status.role !== "admin") {
+        throw redirect({ to: "/" });
+      }
+    } catch (err) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  component: StatisticsPage,
+});
 
 function StatisticsPage() {
   const summaryFn = useServerFn(getSummary);
