@@ -23,6 +23,40 @@ async function safeJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+// Transform functions to convert 'events' field to 'visits'
+function transformToday(data: TodayResponse): Today {
+  return {
+    date: data.date,
+    entries: data.entries,
+    exits: data.exits,
+    visits: data.events,
+  };
+}
+
+function transformHourly(data: HourlyResponse): Hourly {
+  return {
+    date: data.date,
+    hours: data.hours.map((h) => ({
+      hour: h.hour,
+      entries: h.entries,
+      exits: h.exits,
+      visits: h.events,
+    })),
+  };
+}
+
+function transformDaily(data: DailyResponse): Daily {
+  return {
+    since: data.since,
+    days: data.days.map((d) => ({
+      date: d.date,
+      entries: d.entries,
+      exits: d.exits,
+      visits: d.events,
+    })),
+  };
+}
+
 export type Counts = { zones: string[]; counts: Record<string, number>; total: number };
 export type Today = { date: string; entries: number; exits: number; visits: number };
 export type Zones = { zones: string[] };
@@ -30,6 +64,13 @@ export type HourBucket = { hour: number; entries: number; exits: number; visits:
 export type Hourly = { date: string; hours: HourBucket[] };
 export type DayBucket = { date: string; entries: number; exits: number; visits: number };
 export type Daily = { since: string; days: DayBucket[] };
+
+// API response types (what the backend actually returns)
+type TodayResponse = { date: string; entries: number; exits: number; events: number };
+type HourBucketResponse = { hour: number; entries: number; exits: number; events: number };
+type HourlyResponse = { date: string; hours: HourBucketResponse[] };
+type DayBucketResponse = { date: string; entries: number; exits: number; events: number };
+type DailyResponse = { since: string; days: DayBucketResponse[] };
 export type EventRow = {
   ts: string;
   event_id: string;
@@ -45,7 +86,9 @@ export const getCounts = createServerFn({ method: "GET" }).handler(async () => {
 
 export const getToday = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
-  return safeJson<Today>("/api/today", { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, visits: 0 });
+  const defaultToday = { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, events: 0 } as TodayResponse;
+  const data = await safeJson<TodayResponse>("/api/today", defaultToday);
+  return transformToday(data);
 });
 
 export const getZones = createServerFn({ method: "GET" }).handler(async () => {
@@ -55,23 +98,25 @@ export const getZones = createServerFn({ method: "GET" }).handler(async () => {
 
 export const getHourly = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
-  const empty: Hourly = {
+  const emptyResponse: HourlyResponse = {
     date: new Date().toISOString().slice(0, 10),
-    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 })),
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
   };
-  return safeJson<Hourly>("/api/hourly", empty);
+  const data = await safeJson<HourlyResponse>("/api/hourly", emptyResponse);
+  return transformHourly(data);
 });
 
 export const getDaily = createServerFn({ method: "GET" })
-  .inputValidator((d: { days?: number }) => d)
+  .validator((d: { days?: number }) => d)
   .handler(async ({ data }) => {
     await (await import("./gate.server")).assertUnlocked();
     const days = data.days ?? 14;
-    return safeJson<Daily>(`/api/daily?days=${days}`, { since: "", days: [] });
+    const responseData = await safeJson<DailyResponse>(`/api/daily?days=${days}`, { since: "", days: [] });
+    return transformDaily(responseData);
   });
 
 export const getEvents = createServerFn({ method: "GET" })
-  .inputValidator((d: { limit?: number; kind?: string }) => d)
+  .validator((d: { limit?: number; kind?: string }) => d)
   .handler(async ({ data }) => {
     await (await import("./gate.server")).assertUnlocked();
     const params = new URLSearchParams();
@@ -82,21 +127,21 @@ export const getEvents = createServerFn({ method: "GET" })
 
 export const getSummary = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
-  const emptyHourly: Hourly = {
+  const emptyHourlyResponse: HourlyResponse = {
     date: new Date().toISOString().slice(0, 10),
-    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 })),
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
   };
-  const [counts, today, hourly, events] = await Promise.all([
+  const defaultToday = { date: new Date().toISOString().slice(0, 10), entries: 0, exits: 0, events: 0 } as TodayResponse;
+  
+  const [counts, todayResponse, hourlyResponse, events] = await Promise.all([
     safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
-    safeJson<Today>("/api/today", {
-      date: new Date().toISOString().slice(0, 10),
-      entries: 0,
-      exits: 0,
-      visits: 0,
-    }),
-    safeJson<Hourly>("/api/hourly", emptyHourly),
+    safeJson<TodayResponse>("/api/today", defaultToday),
+    safeJson<HourlyResponse>("/api/hourly", emptyHourlyResponse),
     safeJson<EventRow[]>("/api/events?limit=50", []),
   ]);
+
+  const today = transformToday(todayResponse);
+  const hourly = transformHourly(hourlyResponse);
 
   return { counts, today, events, hourly: hourly.hours };
 });

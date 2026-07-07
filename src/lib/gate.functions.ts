@@ -10,7 +10,7 @@ export const getGateStatus = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const login = createServerFn({ method: "POST" })
-  .inputValidator((d: { username: string; password: string }) => d)
+  .validator((d: { username: string; password: string }) => d)
   .handler(async ({ data }) => {
     const { getGateSession, safeEqual } = await import("./gate.server");
     const expectedUser = process.env.SITE_USERNAME;

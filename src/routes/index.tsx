@@ -25,6 +25,7 @@ import {
 
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { HomeSkeleton } from "@/components/HomeSkeleton";
 import {
   Select,
   SelectContent,
@@ -33,7 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toggle } from "@/components/Toggle";
-import { getSummary, getDaily } from "@/lib/lc.functions";
+import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -49,7 +50,6 @@ const modeIcons: Record<string, typeof Snowflake> = {
 
 function Home() {
   const summaryFn = useServerFn(getSummary);
-  const dailyFn = useServerFn(getDaily);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
   const qc = useQueryClient();
@@ -58,16 +58,13 @@ function Home() {
     queryKey: ["lc", "summary"],
     queryFn: () => summaryFn(),
     refetchInterval: 5000,
-  });
-  const daily = useQuery({
-    queryKey: ["lc", "daily", 14],
-    queryFn: () => dailyFn({ data: { days: 14 } }),
-    refetchInterval: 30000,
+    staleTime: 0,
   });
   const states = useQuery({
     queryKey: ["ha", "states"],
     queryFn: () => statesFn(),
     refetchInterval: 6000,
+    staleTime: 0,
   });
 
   const call = useMutation({
@@ -90,16 +87,68 @@ function Home() {
   const total = s?.counts.total ?? 0;
   const today = s?.today;
 
+  // Debug logging
+  useEffect(() => {
+    if (summary.data) {
+      console.log("[DEBUG] Summary data received:", {
+        counts: summary.data.counts,
+        today: summary.data.today,
+        events: summary.data.events?.length,
+        hourly: summary.data.hourly?.length,
+        hourlyData: summary.data.hourly,
+      });
+    }
+    if (summary.error) {
+      console.error("[DEBUG] Summary query error:", summary.error);
+    }
+  }, [summary.data, summary.error]);
+
+  // Show skeleton while primary queries are loading
+  const isLoading = summary.isLoading || states.isLoading;
+
   return (
     <Shell>
+      {isLoading ? (
+        <HomeSkeleton />
+      ) : (
+        <>
       {/* KPI row */}
       <section>
         <SectionHeader title="Live overview" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
           <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
           <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
-          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
+          <StatCard icon={Activity} label="Customers entered" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
+        </div>
+
+        {/* Small badges for table counters (exclude entrance zones) */}
+        <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(160px, 1fr))` }}>
+          {s?.counts.zones
+            .filter((z) => !z.includes("entrance"))
+            .map((z) => {
+              const count = s.counts.counts[z] ?? 0;
+              // friendly label like 'table 1' or 'zone name'
+              const label = z.replace(/_/g, " ");
+              const isGray = count === 1;
+              const isGreen = count > 1;
+              const bgColor = isGray 
+                ? 'bg-gray-400 dark:bg-gray-600' 
+                : isGreen 
+                ? 'bg-green-600 dark:bg-green-700' 
+                : 'bg-muted';
+              const textColor = isGray 
+                ? 'text-gray-900 dark:text-gray-100' 
+                : isGreen 
+                ? 'text-white' 
+                : 'text-muted-foreground';
+              return (
+                <div key={z} className={`flex items-center justify-between px-3 py-2 rounded-md border border-border/30 ${bgColor} ${textColor}`}>
+                  <span className="text-xs font-medium capitalize">{label}</span>
+                  <span className="text-sm font-bold">{count}</span>
+                </div>
+              );
+            })}
         </div>
       </section>
 
@@ -215,51 +264,8 @@ function Home() {
         )}
       </section>
 
-      {/* Traffic charts */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader
-            title="Today by hour"
-            hint="entries · exits · visits"
-            inline
-          />
-          <HourlyChart hourly={s?.hourly ?? []} />
-        </div>
-        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Last 14 days" hint="visits" inline />
-          <DailyChart days={daily.data?.days ?? []} />
-        </div>
-      </section>
-
-      {/* Zones + energy summary */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Zone occupancy" hint="Live from Frigate" inline />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {s?.counts.zones.map((z) => {
-              const count = s.counts.counts[z] ?? 0;
-              return (
-                <div key={z} className="rounded-xl bg-card border border-border p-4">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {z.replace(/_/g, " ")}
-                  </div>
-                  <div className="flex items-end justify-between mt-1">
-                    <div className="font-display text-4xl tabular-nums">{count}</div>
-                    <div
-                      className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        count > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {count > 0 ? "busy" : "empty"}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
+      {/* Energy section */}
+      <section className="mt-10">
         <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <SectionHeader title="Energy" hint="Smart breaker" inline />
           <div className="space-y-4">
@@ -272,6 +278,8 @@ function Home() {
           </div>
         </div>
       </section>
+        </>
+      )}
     </Shell>
   );
 }
@@ -624,98 +632,6 @@ function CameraTile({ cam }: { cam: HAState }) {
         </div>
       )}
     </>
-  );
-}
-
-function HourlyChart({
-  hourly,
-}: {
-  hourly: Array<{ hour: number; entries: number; exits: number; visits: number }>;
-}) {
-  const rows = hourly.length
-    ? hourly
-    : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
-  const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
-  return (
-    <div className="relative pt-2">
-      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border-t border-border/45" />
-        ))}
-      </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
-        {rows.map((h) => {
-          const scale = (v: number) => (v / max) * 100;
-          const total = h.entries + h.exits + h.visits;
-          return (
-            <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}>
-                <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
-                  <div className="w-2 rounded-t bg-primary" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
-                  <div className="w-2 rounded-t bg-accent" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
-                  <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
-                </div>
-              </div>
-              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
-                {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
-              </div>
-              <span className="sr-only">{total} events at hour {h.hour}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> Entries</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent" /> Exits</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Visits</span>
-      </div>
-    </div>
-  );
-}
-
-function DailyChart({
-  days,
-}: {
-  days: Array<{ date: string; entries: number; exits: number; visits: number }>;
-}) {
-  if (!days.length) {
-    return <div className="h-48 grid place-items-center text-xs text-muted-foreground">No data yet</div>;
-  }
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const rows = Array.from({ length: 14 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (13 - i));
-    const key = date.toISOString().slice(0, 10);
-    return byDate.get(key) ?? { date: key, entries: 0, exits: 0, visits: 0 };
-  });
-  const max = Math.max(1, ...rows.map((d) => d.visits));
-  return (
-    <div className="relative pt-2">
-      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border-t border-border/45" />
-        ))}
-      </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
-        {rows.map((d, index) => {
-          const h = (d.visits / max) * 100;
-          return (
-            <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center">
-                <div
-                  className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
-                  style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
-                  title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
-                />
-              </div>
-              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
-                {index % 3 === 1 || index === rows.length - 1 ? d.date.slice(5) : ""}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

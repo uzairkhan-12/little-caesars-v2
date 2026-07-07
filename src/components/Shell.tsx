@@ -110,9 +110,9 @@ export function Shell({
 }) {
   useHAWebSocket();
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background">
       <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-10 py-8">
         {title && (
           <div className="mb-8">
             <h1 className="font-display text-4xl lg:text-5xl tracking-wider">

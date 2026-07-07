@@ -33,7 +33,7 @@ export const getStates = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const callService = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     (d: { domain: string; service: string; entity_id?: string; data?: Record<string, unknown> }) => d,
   )
   .handler(async ({ data }) => {
@@ -48,7 +48,7 @@ export const callService = createServerFn({ method: "POST" })
   });
 
 export const getHistory = createServerFn({ method: "GET" })
-  .inputValidator((d: { entity_id: string; hours?: number }) => d)
+  .validator((d: { entity_id: string; hours?: number }) => d)
   .handler(async ({ data }) => {
     await (await import("./gate.server")).assertUnlocked();
     const hours = data.hours ?? 24;
