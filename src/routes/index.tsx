@@ -249,13 +249,6 @@ function Home() {
           })}
           {!lights.length && <EmptyCard label="No lights" />}
         </div>
-
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MiniStat icon={Zap} label="Power" value={power ? `${power.state} W` : "—"} />
-          <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
-          <MiniStat icon={Thermometer} label="Breaker" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
-          <MiniStat icon={Sun} label="Weather" value={weather ? String(weather.state) : "—"} />
-        </div>
       </section>
 
       {/* Cameras row */}
