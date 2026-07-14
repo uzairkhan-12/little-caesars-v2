@@ -36,6 +36,7 @@ import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 import { getRtspCameras } from "@/lib/rtsp.functions";
+import { formatHour12 } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -145,7 +146,7 @@ function Home() {
           <StatCard
             icon={Activity}
             label="Peak hour"
-            value={`${String(peak.hour).padStart(2, "0")}:00`}
+            value={formatHour12(peak.hour)}
             hint={`${peak.total} customers`}
             tone="accent"
           />

@@ -6,6 +6,7 @@ import { ArrowUpRight, Activity } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { getSummary, getDaily, getEvents, getHourlyByDay, getHourlyByDow } from "@/lib/lc.functions";
 import { getGateStatus } from "@/lib/gate.functions";
+import { formatHour12 } from "@/lib/utils";
 
 export const Route = createFileRoute("/statistics")({
   beforeLoad: async () => {
@@ -89,7 +90,7 @@ function StatisticsPage() {
         <Kpi label="Entries" value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
         <Kpi
           label="Peak hour"
-          value={`${String(peak.hour).padStart(2, "0")}:00`}
+          value={formatHour12(peak.hour)}
           hint={`${peak.total} customers`}
           icon={Activity}
           tone="accent"
@@ -255,11 +256,11 @@ function HourlyChart({
           const scale = (v: number) => (v / max) * 100;
           return (
             <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} customers`}>
+              <div className="w-full flex-1 flex items-end justify-center" title={`${formatHour12(h.hour)} — ${h.entries} customers`}>
                 <div className="w-4 rounded-t bg-warning" style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }} />
               </div>
-              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
-                {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
+              <div className="h-3 text-[9px] text-muted-foreground tabular-nums whitespace-nowrap">
+                {h.hour % 3 === 0 ? formatHour12(h.hour) : ""}
               </div>
               <span className="sr-only">{h.entries} customers at hour {h.hour}</span>
             </div>
