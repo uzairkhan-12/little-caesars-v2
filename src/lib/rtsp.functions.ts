@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 export type RtspCamera = { id: string; name: string };
 
-// RTSP_CAMERAS format: "id:Label,id2:Label2" e.g. "cam1:Front Counter,cam2:Drive Thru"
+// RTSP_CAMERAS format: "id:Label,id2:Label2" e.g. "cam1:Cashier Counter,cam2:Dining Area"
 // The actual rtsp:// URLs (with credentials) live only in the go2rtc config on the
 // Proxmox host — this app never sees or exposes them.
 function parseCameraList(raw: string | undefined): RtspCamera[] {

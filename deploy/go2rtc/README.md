@@ -1,7 +1,7 @@
-# HD camera bridge (go2rtc)
+# Live camera bridge (go2rtc)
 
 Home Assistant's `camera_proxy_stream` re-encodes/downscales feeds, so the
-dashboard's "HD cameras" section instead talks directly to your RTSP cameras
+dashboard's "Live cameras" section instead talks directly to your RTSP cameras
 through [go2rtc](https://github.com/AlexxIT/go2rtc), a small bridge that
 converts RTSP into something a browser `<img>` tag can render (MJPEG) — or
 WebRTC later, if needed.
@@ -93,10 +93,10 @@ plain binary managed by systemd.
 
    ```bash
    GO2RTC_URL=http://127.0.0.1:1984   # or the LAN IP if go2rtc runs elsewhere
-   RTSP_CAMERAS=cam1:Front Counter,cam2:Drive Thru
+   RTSP_CAMERAS=cam1:Cashier Counter,cam2:Dining Area
    ```
 
-7. Restart the app. The dashboard's "HD cameras" section will now proxy live
+7. Restart the app. The dashboard's "Live cameras" section will now proxy live
    MJPEG through `/api/rtsp/$entity`, same security model (login-gated) as
    the existing Home Assistant camera tiles.
 

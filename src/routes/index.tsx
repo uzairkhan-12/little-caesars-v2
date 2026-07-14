@@ -83,7 +83,6 @@ function Home() {
   const data = states.data ?? [];
   const climates = data.filter((e) => e.entity_id.startsWith("climate."));
   const lights = data.filter((e) => e.entity_id.startsWith("light."));
-  const cameras = data.filter((e) => e.entity_id.startsWith("camera."));
   const power = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_power");
   const voltage = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_voltage");
   const energy = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_energy");
@@ -268,9 +267,9 @@ function Home() {
         </div>
       </section>
 
-      {/* HD Cameras row (direct RTSP via go2rtc, bypasses HA's lower-res proxy) */}
+      {/* Live cameras row (direct RTSP via go2rtc, bypasses HA's lower-res proxy) */}
       <section className="mt-10">
-        <SectionHeader title="HD cameras" hint={`${(rtspCameras.data ?? []).length} online`} />
+        <SectionHeader title="Live cameras" hint={`${(rtspCameras.data ?? []).length} online`} />
         {(rtspCameras.data ?? []).length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {(rtspCameras.data ?? []).map((c) => (
@@ -278,25 +277,7 @@ function Home() {
             ))}
           </div>
         ) : (
-          <EmptyCard label="No HD camera configured" />
-        )}
-      </section>
-
-      {/* Cameras row (Home Assistant proxy) */}
-      <section className="mt-10">
-        <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
-        {cameras.length ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {cameras.map((c) => (
-              <CameraTile
-                key={c.entity_id}
-                name={c.attributes.friendly_name ?? c.entity_id}
-                src={`/api/camera/${c.entity_id}?stream=1`}
-              />
-            ))}
-          </div>
-        ) : (
-          <EmptyCard label="No camera" />
+          <EmptyCard label="No camera configured" />
         )}
       </section>
 
