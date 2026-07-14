@@ -1,12 +1,25 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Clock, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { Toggle } from "@/components/Toggle";
 import { getStates, callService } from "@/lib/ha.functions";
+import { getGateStatus } from "@/lib/gate.functions";
 
-export const Route = createFileRoute("/schedules")({ component: SchedulesPage });
+export const Route = createFileRoute("/schedules")({
+  beforeLoad: async () => {
+    try {
+      const status = await getGateStatus();
+      if (!status.unlocked || status.role !== "admin") {
+        throw redirect({ to: "/" });
+      }
+    } catch (err) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  component: SchedulesPage,
+});
 
 function SchedulesPage() {
   const statesFn = useServerFn(getStates);
@@ -94,14 +107,6 @@ function SchedulesPage() {
         {!automations.length && (
           <div className="text-sm text-muted-foreground">No automations found.</div>
         )}
-      </div>
-
-      <div className="mt-8 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-        <h2 className="font-display text-2xl tracking-wider mb-2">Create new schedule</h2>
-        <p className="text-sm text-muted-foreground">
-          New automations are created in Home Assistant directly (Settings → Automations). Once
-          saved they appear here automatically and can be toggled or triggered from this panel.
-        </p>
       </div>
     </Shell>
   );

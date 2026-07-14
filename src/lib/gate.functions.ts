@@ -6,23 +6,33 @@ export const getGateStatus = createServerFn({ method: "GET" }).handler(async () 
   return {
     unlocked: Boolean(session.data.unlocked),
     user: session.data.user ?? null,
+    role: session.data.role ?? null,
   };
 });
 
 export const login = createServerFn({ method: "POST" })
-  .inputValidator((d: { username: string; password: string }) => d)
+  .validator((d: { username: string; password: string }) => d)
   .handler(async ({ data }) => {
     const { getGateSession, safeEqual } = await import("./gate.server");
-    const expectedUser = process.env.SITE_USERNAME;
-    const expectedPass = process.env.SITE_PASSWORD;
-    if (!expectedUser || !expectedPass) {
-      throw new Error("Site credentials are not configured");
+    
+    // Define users with roles
+    const adminUser = process.env.SITE_USERNAME ?? "admin";
+    const adminPass = process.env.SITE_PASSWORD ?? "admin";
+    const employeeUser = process.env.EMPLOYEE_USERNAME ?? "employee";
+    const employeePass = process.env.EMPLOYEE_PASSWORD ?? "employee";
+    
+    let role: "admin" | "employee" | null = null;
+    
+    if (safeEqual(data.username, adminUser) && safeEqual(data.password, adminPass)) {
+      role = "admin";
+    } else if (safeEqual(data.username, employeeUser) && safeEqual(data.password, employeePass)) {
+      role = "employee";
+    } else {
+      return { ok: false as const };
     }
-    const ok =
-      safeEqual(data.username, expectedUser) && safeEqual(data.password, expectedPass);
-    if (!ok) return { ok: false as const };
+    
     const session = await getGateSession();
-    await session.update({ unlocked: true, user: expectedUser });
+    await session.update({ unlocked: true, user: data.username, role });
     return { ok: true as const };
   });
 

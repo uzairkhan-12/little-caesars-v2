@@ -10,8 +10,8 @@
 #
 # Stream names here ("cam1", "cam2") must match RTSP_CAMERAS ids in the app's .env.
 streams:
-  cam1: rtsp://admin:your-password@192.168.5.20:554/h264Preview_01_main
-  cam2: rtsp://admin:your-password@192.168.5.21:554/h264Preview_01_main
+  cam1: rtsp://admin:your-password@192.168.5.21:554/h264Preview_01_main
+  cam2: rtsp://admin:your-password@192.168.5.20:554/h264Preview_01_main
 
 api:
   # Bind to all interfaces inside its own container/network; keep this port

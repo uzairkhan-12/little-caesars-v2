@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 
 import {
@@ -25,6 +25,7 @@ import {
 
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { HomeSkeleton } from "@/components/HomeSkeleton";
 import {
   Select,
   SelectContent,
@@ -33,7 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Toggle } from "@/components/Toggle";
-import { getSummary, getDaily } from "@/lib/lc.functions";
+import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 import { getRtspCameras } from "@/lib/rtsp.functions";
 
@@ -50,7 +51,6 @@ const modeIcons: Record<string, typeof Snowflake> = {
 
 function Home() {
   const summaryFn = useServerFn(getSummary);
-  const dailyFn = useServerFn(getDaily);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
   const rtspCamerasFn = useServerFn(getRtspCameras);
@@ -60,16 +60,13 @@ function Home() {
     queryKey: ["lc", "summary"],
     queryFn: () => summaryFn(),
     refetchInterval: 5000,
-  });
-  const daily = useQuery({
-    queryKey: ["lc", "daily", 14],
-    queryFn: () => dailyFn({ data: { days: 14 } }),
-    refetchInterval: 30000,
+    staleTime: 0,
   });
   const states = useQuery({
     queryKey: ["ha", "states"],
     queryFn: () => statesFn(),
     refetchInterval: 6000,
+    staleTime: 0,
   });
   const rtspCameras = useQuery({
     queryKey: ["rtsp", "cameras"],
@@ -93,20 +90,79 @@ function Home() {
   const breakerTemp = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_temperature");
   const weather = data.find((e) => e.entity_id.startsWith("weather."));
 
+  // Energy monitoring for AC units
+  const energyMap: Record<string, { current: string; power: string; energy: string }> = {
+    "climate.kitchen_1": {
+      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "N/A",
+      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_1")?.state ?? "N/A",
+      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_1")?.state ?? "N/A",
+    },
+    "climate.office": {
+      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "N/A",
+      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_2")?.state ?? "N/A",
+      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_2")?.state ?? "N/A",
+    },
+  };
+
   const s = summary.data;
   const total = s?.counts.total ?? 0;
   const today = s?.today;
 
+  // Debug logging
+  useEffect(() => {
+    if (summary.data) {
+      console.log("[DEBUG] Summary data received:", {
+        counts: summary.data.counts,
+        today: summary.data.today,
+        events: summary.data.events?.length,
+        hourly: summary.data.hourly?.length,
+        hourlyData: summary.data.hourly,
+      });
+    }
+    if (summary.error) {
+      console.error("[DEBUG] Summary query error:", summary.error);
+    }
+  }, [summary.data, summary.error]);
+
+  // Show skeleton while primary queries are loading
+  const isLoading = summary.isLoading || states.isLoading;
+
   return (
     <Shell>
+      {isLoading ? (
+        <HomeSkeleton />
+      ) : (
+        <>
       {/* KPI row */}
       <section>
         <SectionHeader title="Live overview" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
           <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
           <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
-          <StatCard icon={Activity} label="Visits" value={today?.visits ?? 0} hint="Logged today" tone="primary" />
+        </div>
+
+        {/* Small badges for table occupancy status (exclude entrance zones) */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {s?.counts.zones
+            .filter((z) => !z.includes("entrance"))
+            .map((z) => {
+              const count = s.counts.counts[z] ?? 0;
+              // friendly label like 'table 1' or 'zone name'
+              const label = z.replace(/_/g, " ");
+              const isOccupied = count > 0;
+              const bgColor = isOccupied 
+                ? 'bg-green-600 dark:bg-green-700' 
+                : 'bg-muted';
+              const textColor = isOccupied 
+                ? 'text-white' 
+                : 'text-muted-foreground';
+              return (
+                <div key={z} className={`px-4 py-2 rounded-md border border-border/30 ${bgColor} ${textColor} text-center`}>
+                  <span className="text-xs font-medium capitalize">{label}</span>
+                </div>
+              );
+            })}
         </div>
       </section>
 
@@ -118,6 +174,7 @@ function Home() {
             <ClimateCard
               key={c.entity_id}
               c={c}
+              energy={energyMap[c.entity_id]}
               onTemp={(t) =>
                 call.mutate({
                   domain: "climate",
@@ -199,13 +256,6 @@ function Home() {
           })}
           {!lights.length && <EmptyCard label="No lights" />}
         </div>
-
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MiniStat icon={Zap} label="Power" value={power ? `${power.state} W` : "—"} />
-          <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
-          <MiniStat icon={Thermometer} label="Breaker" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
-          <MiniStat icon={Sun} label="Weather" value={weather ? String(weather.state) : "—"} />
-        </div>
       </section>
 
       {/* HD Cameras row (direct RTSP via go2rtc, bypasses HA's lower-res proxy) */}
@@ -240,53 +290,11 @@ function Home() {
         )}
       </section>
 
-      {/* Traffic charts */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader
-            title="Today by hour"
-            hint="entries · exits · visits"
-            inline
-          />
-          <HourlyChart hourly={s?.hourly ?? []} />
-        </div>
+      {/* Energy section */}
+      <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lights Energy */}
         <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Last 14 days" hint="visits" inline />
-          <DailyChart days={daily.data?.days ?? []} />
-        </div>
-      </section>
-
-      {/* Zones + energy summary */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Zone occupancy" hint="Live from Frigate" inline />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {s?.counts.zones.map((z) => {
-              const count = s.counts.counts[z] ?? 0;
-              return (
-                <div key={z} className="rounded-xl bg-card border border-border p-4">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {z.replace(/_/g, " ")}
-                  </div>
-                  <div className="flex items-end justify-between mt-1">
-                    <div className="font-display text-4xl tabular-nums">{count}</div>
-                    <div
-                      className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        count > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {count > 0 ? "busy" : "empty"}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Energy" hint="Smart breaker" inline />
+          <SectionHeader title="Lights Energy" hint="Lighting system" inline />
           <div className="space-y-4">
             <BigMetric label="Power draw" value={power ? `${power.state}` : "0"} unit="W" tone="primary" />
             <BigMetric label="Total energy" value={energy ? `${energy.state}` : "0"} unit="kWh" tone="accent" />
@@ -296,7 +304,58 @@ function Home() {
             </div>
           </div>
         </div>
+
+        {/* AC Energy */}
+        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+          <SectionHeader title="AC Energy" hint="Climate system" inline />
+          <div className="space-y-4">
+            <BigMetric 
+              label="Total Power" 
+              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state 
+                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state).toFixed(2)
+                : "0"} 
+              unit="W" 
+              tone="primary" 
+            />
+            <BigMetric 
+              label="Total Energy" 
+              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state 
+                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state).toFixed(2)
+                : "0"} 
+              unit="kWh" 
+              tone="accent" 
+            />
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/50">
+              <MiniStat 
+                icon={Activity} 
+                label="Current" 
+                value={(() => {
+                  const c1 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "");
+                  const c2 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "");
+                  if (isNaN(c1) && isNaN(c2)) return "—";
+                  return `${((isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2)).toFixed(2)} A`;
+                })()} 
+              />
+              <MiniStat 
+                icon={Activity} 
+                label="Voltage" 
+                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state 
+                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state).toFixed(2)} V` 
+                  : "—"} 
+              />
+              <MiniStat 
+                icon={Thermometer} 
+                label="Temp" 
+                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state 
+                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state).toFixed(1)}°C` 
+                  : "—"} 
+              />
+            </div>
+          </div>
+        </div>
       </section>
+        </>
+      )}
     </Shell>
   );
 }
@@ -402,12 +461,14 @@ function ClimateCard({
   onMode,
   onFan,
   onSwing,
+  energy,
 }: {
   c: HAState;
   onTemp: (t: number) => void;
   onMode: (m: string) => void;
   onFan: (f: string) => void;
   onSwing: (s: string) => void;
+  energy?: { current?: string; power?: string; energy?: string };
 }) {
   const mode = c.state;
   const attrs = c.attributes as {
@@ -421,8 +482,8 @@ function ClimateCard({
     swing_modes?: string[];
     friendly_name?: string;
   };
-  const target = Number(attrs.temperature ?? 22);
-  const current = Number(attrs.current_temperature ?? target);
+  const haTarget = Number(attrs.temperature ?? 22);
+  const current = Number(attrs.current_temperature ?? haTarget);
   const humidity = attrs.current_humidity;
   const modes = attrs.hvac_modes ?? ["off", "cool", "heat", "fan_only", "dry"];
   const fanModes = attrs.fan_modes ?? [];
@@ -431,6 +492,56 @@ function ClimateCard({
   const swingMode = attrs.swing_mode;
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
+
+  // Optimistic temperature state
+  const [localTemp, setLocalTemp] = useState<number>(haTarget);
+  const [syncing, setSyncing] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revertRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<number | null>(null);
+  const haTargetRef = useRef<number>(haTarget);
+
+  // Keep haTargetRef in sync so revert timeout always uses latest HA value
+  useEffect(() => {
+    haTargetRef.current = haTarget;
+  }, [haTarget]);
+
+  // Sync local temp when HA confirms the new value
+  useEffect(() => {
+    if (pendingRef.current === null) {
+      setLocalTemp(haTarget);
+    } else if (haTarget === pendingRef.current) {
+      // HA confirmed our value — clear revert timer
+      setSyncing(false);
+      pendingRef.current = null;
+      if (revertRef.current) clearTimeout(revertRef.current);
+    }
+  }, [haTarget]);
+
+  const adjustTemp = (delta: number) => {
+    const next = localTemp + delta;
+    setLocalTemp(next);
+    setSyncing(true);
+    pendingRef.current = next;
+
+    // Clear any existing revert timer — user is still clicking
+    if (revertRef.current) clearTimeout(revertRef.current);
+
+    // Debounce: only send to HA after 600ms of no clicks
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onTemp(next);
+
+      // After 15s if HA hasn't confirmed, revert to last known HA value
+      revertRef.current = setTimeout(() => {
+        if (pendingRef.current !== null) {
+          setLocalTemp(haTargetRef.current);
+          setSyncing(false);
+          pendingRef.current = null;
+        }
+      }, 15000);
+    }, 600);
+  };
 
   const accentText = "text-primary";
   const accentBg = "bg-primary/20 text-primary";
@@ -467,25 +578,33 @@ function ClimateCard({
             <div className="text-[11px] text-muted-foreground mt-0.5">{humidity}% humidity</div>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => onTemp(target - 1)}
-            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-            aria-label="Decrease"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          <div className="text-center min-w-[56px]">
-            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
-            <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>{target}°</div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => adjustTemp(-1)}
+              className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
+              aria-label="Decrease"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <div className="text-center min-w-[56px]">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
+              <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>
+                {localTemp}°
+              </div>
+            </div>
+            <button
+              onClick={() => adjustTemp(1)}
+              className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
+              aria-label="Increase"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            onClick={() => onTemp(target + 1)}
-            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-            aria-label="Increase"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          {/* Sync status indicator */}
+          {syncing && (
+            <span className="text-[10px] text-muted-foreground animate-pulse">Updating…</span>
+          )}
         </div>
       </div>
 
@@ -553,12 +672,28 @@ function ClimateCard({
           )}
         </div>
       )}
+
+      <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Current</span>
+          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? "N/A" : `${parseFloat(energy.current).toFixed(2)} A`}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Power</span>
+          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${parseFloat(energy.power).toFixed(2)} W`}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Energy</span>
+          <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? "N/A" : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
+        </div>
+      </div>
     </div>
   );
 }
 
 function CameraTile({ name, src }: { name: string; src: string }) {
   const [full, setFull] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!full) return;
@@ -585,8 +720,10 @@ function CameraTile({ name, src }: { name: string; src: string }) {
             <div>
               <div className="font-display text-lg tracking-wider">{name}</div>
               <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-                LIVE
+                <span
+                  className={`w-1.5 h-1.5 rounded-full animate-pulse ${error ? "bg-yellow-500" : "bg-destructive"}`}
+                />
+                {error ? "Connecting…" : "LIVE"}
               </div>
             </div>
           </div>
@@ -604,17 +741,35 @@ function CameraTile({ name, src }: { name: string; src: string }) {
           className="relative aspect-video bg-black w-full block group"
           aria-label={`Expand ${name}`}
         >
-          <img
-            src={src}
-            alt={name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-            }}
-          />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
-            <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
-          </div>
+          {error ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Video className="w-10 h-10 opacity-30" />
+              <span className="text-xs">Stream unavailable</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setError(false);
+                }}
+                className="text-xs text-primary underline mt-1"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <>
+              <img
+                src={src}
+                alt={name}
+                className="w-full h-full object-cover"
+                onError={() => setError(true)}
+                onLoad={() => setError(false)}
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
+                <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
+              </div>
+            </>
+          )}
         </button>
       </div>
 
@@ -630,7 +785,10 @@ function CameraTile({ name, src }: { name: string; src: string }) {
               <span className="text-[11px] uppercase tracking-widest text-white/60">Live</span>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); setFull(false); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFull(false);
+              }}
               className="w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center"
               aria-label="Close"
             >
@@ -642,9 +800,6 @@ function CameraTile({ name, src }: { name: string; src: string }) {
               src={src}
               alt={name}
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-              }}
             />
           </div>
         </div>
@@ -652,98 +807,4 @@ function CameraTile({ name, src }: { name: string; src: string }) {
     </>
   );
 }
-
-function HourlyChart({
-  hourly,
-}: {
-  hourly: Array<{ hour: number; entries: number; exits: number; visits: number }>;
-}) {
-  const rows = hourly.length
-    ? hourly
-    : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
-  const max = Math.max(1, ...rows.map((h) => h.entries + h.exits + h.visits));
-  return (
-    <div className="relative pt-2">
-      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border-t border-border/45" />
-        ))}
-      </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
-        {rows.map((h) => {
-          const scale = (v: number) => (v / max) * 100;
-          const total = h.entries + h.exits + h.visits;
-          return (
-            <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} in / ${h.exits} out / ${h.visits} visits`}>
-                <div className="flex h-full items-end justify-center gap-0.5 w-full max-w-8">
-                  <div className="w-2 rounded-t bg-primary" style={{ height: `${Math.max(scale(h.entries), h.entries ? 3 : 0)}%` }} />
-                  <div className="w-2 rounded-t bg-accent" style={{ height: `${Math.max(scale(h.exits), h.exits ? 3 : 0)}%` }} />
-                  <div className="w-2 rounded-t bg-warning" style={{ height: `${Math.max(scale(h.visits), h.visits ? 3 : 0)}%` }} />
-                </div>
-              </div>
-              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
-                {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
-              </div>
-              <span className="sr-only">{total} events at hour {h.hour}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> Entries</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent" /> Exits</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Visits</span>
-      </div>
-    </div>
-  );
-}
-
-function DailyChart({
-  days,
-}: {
-  days: Array<{ date: string; entries: number; exits: number; visits: number }>;
-}) {
-  if (!days.length) {
-    return <div className="h-48 grid place-items-center text-xs text-muted-foreground">No data yet</div>;
-  }
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const rows = Array.from({ length: 14 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (13 - i));
-    const key = date.toISOString().slice(0, 10);
-    return byDate.get(key) ?? { date: key, entries: 0, exits: 0, visits: 0 };
-  });
-  const max = Math.max(1, ...rows.map((d) => d.visits));
-  return (
-    <div className="relative pt-2">
-      <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border-t border-border/45" />
-        ))}
-      </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
-        {rows.map((d, index) => {
-          const h = (d.visits / max) * 100;
-          return (
-            <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center">
-                <div
-                  className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
-                  style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
-                  title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
-                />
-              </div>
-              <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
-                {index % 3 === 1 || index === rows.length - 1 ? d.date.slice(5) : ""}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-
 
