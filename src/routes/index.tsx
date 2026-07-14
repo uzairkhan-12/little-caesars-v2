@@ -301,7 +301,7 @@ function Home() {
 
       {/* Energy section */}
       <section className="mt-10">
-        <SectionHeader title="Power / Energy usage" />
+        <SectionHeader title="Daily Power / Energy usage" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Lights Energy */}
           <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
