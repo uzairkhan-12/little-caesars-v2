@@ -12,4 +12,14 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      // The app is self-hosted (Proxmox) behind a cloudflared tunnel, so the
+      // Host header on incoming requests is the public domain below rather
+      // than localhost — Vite's dev-server host check (DNS-rebinding
+      // protection) needs it allow-listed explicitly or every request 404s
+      // with "Blocked request. This host is not allowed."
+      allowedHosts: ["little-caesars.primewave2.tech"],
+    },
+  },
 });
