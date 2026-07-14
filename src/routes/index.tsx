@@ -6,7 +6,6 @@ import { useState, useEffect, useRef } from "react";
 
 import {
   ArrowUpRight,
-  ArrowDownRight,
   Users,
   Activity,
   Lightbulb,
@@ -107,6 +106,10 @@ function Home() {
   const s = summary.data;
   const total = s?.counts.total ?? 0;
   const today = s?.today;
+  const peak = (s?.hourly ?? []).reduce(
+    (p, h) => (h.visits > p.total ? { hour: h.hour, total: h.visits } : p),
+    { hour: 0, total: 0 },
+  );
 
   // Debug logging
   useEffect(() => {
@@ -138,8 +141,14 @@ function Home() {
         <SectionHeader title="Live overview" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
-          <StatCard icon={ArrowUpRight} label="Entries today" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
-          <StatCard icon={ArrowDownRight} label="Exits today" value={today?.exits ?? 0} hint={today?.date ?? ""} tone="accent" />
+          <StatCard icon={ArrowUpRight} label="Customer visits" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
+          <StatCard
+            icon={Activity}
+            label="Peak hour"
+            value={`${String(peak.hour).padStart(2, "0")}:00`}
+            hint={`${peak.total} customers`}
+            tone="accent"
+          />
         </div>
 
         {/* Small badges for table occupancy status (exclude entrance zones) */}
@@ -291,65 +300,76 @@ function Home() {
       </section>
 
       {/* Energy section */}
-      <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lights Energy */}
-        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="Lights Energy" hint="Lighting system" inline />
-          <div className="space-y-4">
-            <BigMetric label="Power draw" value={power ? `${power.state}` : "0"} unit="W" tone="primary" />
-            <BigMetric label="Total energy" value={energy ? `${energy.state}` : "0"} unit="kWh" tone="accent" />
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-              <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
-              <MiniStat icon={Thermometer} label="Temp" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
+      <section className="mt-10">
+        <SectionHeader title="Power / Energy usage" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Lights Energy */}
+          <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+            <SectionHeader title="Lights Energy" hint="Lighting system" inline />
+            <div className="space-y-4">
+              <BigMetric label="Power draw" value={power ? `${power.state}` : "0"} unit="W" tone="primary" />
+              <BigMetric label="Total energy" value={energy ? `${energy.state}` : "0"} unit="kWh" tone="accent" />
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
+                <MiniStat icon={Thermometer} label="Temp" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* AC Energy */}
-        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <SectionHeader title="AC Energy" hint="Climate system" inline />
-          <div className="space-y-4">
-            <BigMetric 
-              label="Total Power" 
-              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state 
-                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state).toFixed(2)
-                : "0"} 
-              unit="W" 
-              tone="primary" 
-            />
-            <BigMetric 
-              label="Total Energy" 
-              value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state 
-                ? Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state).toFixed(2)
-                : "0"} 
-              unit="kWh" 
-              tone="accent" 
-            />
-            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/50">
-              <MiniStat 
-                icon={Activity} 
-                label="Current" 
-                value={(() => {
-                  const c1 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "");
-                  const c2 = parseFloat(data.find(e => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "");
-                  if (isNaN(c1) && isNaN(c2)) return "—";
-                  return `${((isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2)).toFixed(2)} A`;
-                })()} 
+          {/* AC Energy */}
+          <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+            <SectionHeader title="AC Energy" hint="Climate system" inline />
+            <div className="space-y-4">
+              <BigMetric
+                label="Total Power"
+                value={
+                  data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state
+                    ? Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state).toFixed(2)
+                    : "0"
+                }
+                unit="W"
+                tone="primary"
               />
-              <MiniStat 
-                icon={Activity} 
-                label="Voltage" 
-                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state 
-                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state).toFixed(2)} V` 
-                  : "—"} 
+              <BigMetric
+                label="Total Energy"
+                value={
+                  data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state
+                    ? Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state).toFixed(2)
+                    : "0"
+                }
+                unit="kWh"
+                tone="accent"
               />
-              <MiniStat 
-                icon={Thermometer} 
-                label="Temp" 
-                value={data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state 
-                  ? `${Number(data.find(e => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state).toFixed(1)}°C` 
-                  : "—"} 
-              />
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/50">
+                <MiniStat
+                  icon={Activity}
+                  label="Current"
+                  value={(() => {
+                    const c1 = parseFloat(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "");
+                    const c2 = parseFloat(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "");
+                    if (isNaN(c1) && isNaN(c2)) return "—";
+                    return `${((isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2)).toFixed(2)} A`;
+                  })()}
+                />
+                <MiniStat
+                  icon={Activity}
+                  label="Voltage"
+                  value={
+                    data.find((e) => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state
+                      ? `${Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state).toFixed(2)} V`
+                      : "—"
+                  }
+                />
+                <MiniStat
+                  icon={Thermometer}
+                  label="Temp"
+                  value={
+                    data.find((e) => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state
+                      ? `${Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state).toFixed(1)}°C`
+                      : "—"
+                  }
+                />
+              </div>
             </div>
           </div>
         </div>
