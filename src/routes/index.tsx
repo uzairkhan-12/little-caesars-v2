@@ -767,7 +767,14 @@ function CameraTile({ cam }: { cam: HAState }) {
 
 function RtspCameraTile({ id, name }: { id: string; name: string }) {
   const [full, setFull] = useState(false);
-  const streamUrl = `/api/rtsp/${id}`;
+  const [error, setError] = useState(false);
+  // Camera proxy runs on port 3001 on the same server
+  // In production: same host but port 3001
+  // Injected via VITE_CAMERA_PROXY_URL env var, fallback to same-origin port 3001
+  const proxyBase = (typeof window !== "undefined"
+    ? (import.meta.env.VITE_CAMERA_PROXY_URL || `${window.location.protocol}//${window.location.hostname}:3001`)
+    : "");
+  const streamUrl = `${proxyBase}/stream/${id}`;
 
   useEffect(() => {
     if (!full) return;
@@ -792,8 +799,8 @@ function RtspCameraTile({ id, name }: { id: string; name: string }) {
             <div>
               <div className="font-display text-lg tracking-wider">{name}</div>
               <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-                LIVE · HD
+                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${error ? "bg-yellow-500" : "bg-destructive"}`} />
+                {error ? "Connecting…" : "LIVE · HD"}
               </div>
             </div>
           </div>
@@ -811,15 +818,30 @@ function RtspCameraTile({ id, name }: { id: string; name: string }) {
           className="relative aspect-video bg-black w-full block group"
           aria-label={`Expand ${name}`}
         >
-          <img
-            src={streamUrl}
-            alt={name}
-            className="w-full h-full object-cover"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }}
-          />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
-            <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
-          </div>
+          {error ? (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Video className="w-10 h-10 opacity-30" />
+              <span className="text-xs">Stream unavailable</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setError(false); }}
+                className="text-xs text-primary underline mt-1"
+              >Retry</button>
+            </div>
+          ) : (
+            <>
+              <img
+                src={streamUrl}
+                alt={name}
+                className="w-full h-full object-cover"
+                onError={() => setError(true)}
+                onLoad={() => setError(false)}
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
+                <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
+              </div>
+            </>
+          )}
         </button>
       </div>
 
@@ -854,6 +876,5 @@ function RtspCameraTile({ id, name }: { id: string; name: string }) {
     </>
   );
 }
-
 
 

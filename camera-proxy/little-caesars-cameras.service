@@ -1,0 +1,15 @@
+[Unit]
+Description=Little Caesars Camera MJPEG Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/little-caesars-v2/camera-proxy
+ExecStart=/usr/bin/node /root/little-caesars-v2/camera-proxy/server.js
+Restart=always
+RestartSec=5
+Environment=CAMERA_PROXY_PORT=3001
+
+[Install]
+WantedBy=multi-user.target
