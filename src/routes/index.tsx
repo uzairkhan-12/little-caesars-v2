@@ -35,6 +35,7 @@ import {
 import { Toggle } from "@/components/Toggle";
 import { getSummary, getDaily } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
+import { getRtspCameras } from "@/lib/rtsp.functions";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -52,6 +53,7 @@ function Home() {
   const dailyFn = useServerFn(getDaily);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
+  const rtspCamerasFn = useServerFn(getRtspCameras);
   const qc = useQueryClient();
 
   const summary = useQuery({
@@ -68,6 +70,11 @@ function Home() {
     queryKey: ["ha", "states"],
     queryFn: () => statesFn(),
     refetchInterval: 6000,
+  });
+  const rtspCameras = useQuery({
+    queryKey: ["rtsp", "cameras"],
+    queryFn: () => rtspCamerasFn(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const call = useMutation({
@@ -201,13 +208,31 @@ function Home() {
         </div>
       </section>
 
-      {/* Cameras row */}
+      {/* HD Cameras row (direct RTSP via go2rtc, bypasses HA's lower-res proxy) */}
+      <section className="mt-10">
+        <SectionHeader title="HD cameras" hint={`${(rtspCameras.data ?? []).length} online`} />
+        {(rtspCameras.data ?? []).length ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {(rtspCameras.data ?? []).map((c) => (
+              <CameraTile key={c.id} name={c.name} src={`/api/rtsp/${c.id}?stream=1`} />
+            ))}
+          </div>
+        ) : (
+          <EmptyCard label="No HD camera configured" />
+        )}
+      </section>
+
+      {/* Cameras row (Home Assistant proxy) */}
       <section className="mt-10">
         <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
         {cameras.length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {cameras.map((c) => (
-              <CameraTile key={c.entity_id} cam={c} />
+              <CameraTile
+                key={c.entity_id}
+                name={c.attributes.friendly_name ?? c.entity_id}
+                src={`/api/camera/${c.entity_id}?stream=1`}
+              />
             ))}
           </div>
         ) : (
@@ -532,7 +557,7 @@ function ClimateCard({
   );
 }
 
-function CameraTile({ cam }: { cam: HAState }) {
+function CameraTile({ name, src }: { name: string; src: string }) {
   const [full, setFull] = useState(false);
 
   useEffect(() => {
@@ -548,8 +573,6 @@ function CameraTile({ cam }: { cam: HAState }) {
       document.body.style.overflow = prev;
     };
   }, [full]);
-
-  const name = cam.attributes.friendly_name ?? cam.entity_id;
 
   return (
     <>
@@ -582,8 +605,8 @@ function CameraTile({ cam }: { cam: HAState }) {
           aria-label={`Expand ${name}`}
         >
           <img
-            src={`/api/camera/${cam.entity_id}?stream=1`}
-            alt={cam.entity_id}
+            src={src}
+            alt={name}
             className="w-full h-full object-cover"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
@@ -616,9 +639,12 @@ function CameraTile({ cam }: { cam: HAState }) {
           </div>
           <div className="flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
             <img
-              src={`/api/camera/${cam.entity_id}?stream=1`}
-              alt={cam.entity_id}
+              src={src}
+              alt={name}
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
+              }}
             />
           </div>
         </div>

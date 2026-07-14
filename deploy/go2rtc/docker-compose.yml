@@ -1,0 +1,19 @@
+# Run go2rtc as a small, always-on RTSP -> MJPEG/WebRTC bridge on the Proxmox
+# host (or an LXC/VM with Docker) that's on the same LAN as the cameras.
+#
+# Usage:
+#   cd deploy/go2rtc
+#   cp go2rtc.yaml.example go2rtc.yaml   # then edit in your real RTSP creds
+#   docker compose up -d
+#
+# Then set in the app's .env (on the host running little-caesars-v2):
+#   GO2RTC_URL=http://<this-host-ip>:1984
+#   RTSP_CAMERAS=cam1:Front Counter,cam2:Drive Thru
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: go2rtc
+    restart: unless-stopped
+    network_mode: host # simplest way to reach cameras + expose :1984 on the LAN
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
