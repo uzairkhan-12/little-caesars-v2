@@ -768,13 +768,8 @@ function CameraTile({ cam }: { cam: HAState }) {
 function RtspCameraTile({ id, name }: { id: string; name: string }) {
   const [full, setFull] = useState(false);
   const [error, setError] = useState(false);
-  // Camera proxy runs on port 3001 on the same server
-  // In production: same host but port 3001
-  // Injected via VITE_CAMERA_PROXY_URL env var, fallback to same-origin port 3001
-  const proxyBase = (typeof window !== "undefined"
-    ? (import.meta.env.VITE_CAMERA_PROXY_URL || `${window.location.protocol}//${window.location.hostname}:3001`)
-    : "");
-  const streamUrl = `${proxyBase}/stream/${id}`;
+  // Route through nginx /stream/ → localhost:3001 (avoids Cloudflare port blocking)
+  const streamUrl = `/stream/${id}`;
 
   useEffect(() => {
     if (!full) return;
