@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/little-caesars-v2/camera-proxy
-ExecStart=/usr/bin/node /root/little-caesars-v2/camera-proxy/server.js
+ExecStart=/usr/bin/env node /root/little-caesars-v2/camera-proxy/server.js
 Restart=always
 RestartSec=5
 Environment=CAMERA_PROXY_PORT=3001
