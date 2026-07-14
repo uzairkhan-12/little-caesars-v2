@@ -107,7 +107,7 @@ function Home() {
   const total = s?.counts.total ?? 0;
   const today = s?.today;
   const peak = (s?.hourly ?? []).reduce(
-    (p, h) => (h.visits > p.total ? { hour: h.hour, total: h.visits } : p),
+    (p, h) => (h.entries > p.total ? { hour: h.hour, total: h.entries } : p),
     { hour: 0, total: 0 },
   );
 

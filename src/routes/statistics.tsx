@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
+import { ArrowUpRight, Activity } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { getSummary, getDaily, getEvents, getHourlyByDay, getHourlyByDow } from "@/lib/lc.functions";
 import { getGateStatus } from "@/lib/gate.functions";
@@ -79,15 +79,14 @@ function StatisticsPage() {
 
   const totals = isToday ? summary?.today : undefined;
   const peak = hourlyData.reduce(
-    (p, h) => (h.visits > p.total ? { hour: h.hour, total: h.visits } : p),
+    (p, h) => (h.entries > p.total ? { hour: h.hour, total: h.entries } : p),
     { hour: 0, total: 0 },
   );
 
   return (
     <Shell title="Statistics">
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Kpi label="Entries" value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
-        <Kpi label="Exits" value={totals?.exits ?? 0} icon={ArrowDownRight} tone="warning" />
         <Kpi
           label="Peak hour"
           value={`${String(peak.hour).padStart(2, "0")}:00`}
@@ -243,7 +242,7 @@ function HourlyChart({
   const rows = hourly.length
     ? hourly
     : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
-  const max = Math.max(1, ...rows.map((h) => h.visits));
+  const max = Math.max(1, ...rows.map((h) => h.entries));
   return (
     <div className="relative pt-2">
       <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
@@ -256,13 +255,13 @@ function HourlyChart({
           const scale = (v: number) => (v / max) * 100;
           return (
             <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.visits} customers`}>
-                <div className="w-4 rounded-t bg-warning" style={{ height: `${h.visits ? Math.max(scale(h.visits), 3) : 0}%` }} />
+              <div className="w-full flex-1 flex items-end justify-center" title={`${h.hour}:00 — ${h.entries} customers`}>
+                <div className="w-4 rounded-t bg-warning" style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }} />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
                 {h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""}
               </div>
-              <span className="sr-only">{h.visits} customers at hour {h.hour}</span>
+              <span className="sr-only">{h.entries} customers at hour {h.hour}</span>
             </div>
           );
         })}
@@ -289,7 +288,7 @@ function DailyChart({
     const key = date.toISOString().slice(0, 10);
     return byDate.get(key) ?? { date: key, entries: 0, exits: 0, visits: 0 };
   });
-  const max = Math.max(1, ...rows.map((d) => d.visits));
+  const max = Math.max(1, ...rows.map((d) => d.entries));
   return (
     <div className="relative pt-2">
       <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
@@ -299,14 +298,14 @@ function DailyChart({
       </div>
       <div className="relative flex items-end justify-between gap-2 h-56 px-1">
         {rows.map((d, index) => {
-          const h = (d.visits / max) * 100;
+          const h = (d.entries / max) * 100;
           return (
             <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
               <div className="w-full flex-1 flex items-end justify-center">
                 <div
                   className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
-                  style={{ height: `${d.visits ? Math.max(h, 3) : 0}%` }}
-                  title={`${d.date} — ${d.visits} visits, ${d.entries} in / ${d.exits} out`}
+                  style={{ height: `${d.entries ? Math.max(h, 3) : 0}%` }}
+                  title={`${d.date} — ${d.entries} customers entered`}
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
