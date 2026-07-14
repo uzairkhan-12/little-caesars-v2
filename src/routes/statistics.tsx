@@ -1,9 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
 import { Shell } from "@/components/Shell";
-import { getSummary, getDaily, getEvents } from "@/lib/lc.functions";
+import { getSummary, getDaily, getEvents, getHourlyByDay, getHourlyByDow } from "@/lib/lc.functions";
 import { getGateStatus } from "@/lib/gate.functions";
 
 export const Route = createFileRoute("/statistics")({
@@ -24,6 +25,19 @@ function StatisticsPage() {
   const summaryFn = useServerFn(getSummary);
   const dailyFn = useServerFn(getDaily);
   const eventsFn = useServerFn(getEvents);
+  const hourlyByDayFn = useServerFn(getHourlyByDay);
+  const hourlyByDowFn = useServerFn(getHourlyByDow);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // filter: "today" | "dow:0" .. "dow:6"
+  const [filter, setFilter] = useState<string>("today");
+
+  const isToday = filter === "today";
+  const isDow = filter.startsWith("dow:");
+  const dowValue = isDow ? parseInt(filter.split(":")[1]) : -1;
+
+  const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   const { data: summary } = useQuery({
     queryKey: ["lc", "summary"],
@@ -40,13 +54,32 @@ function StatisticsPage() {
     queryFn: () => eventsFn({ data: { limit: 200 } }),
     refetchInterval: 10000,
   });
+  const { data: hourlyByDay, isFetching: hourlyByDayLoading, isSuccess: hourlyByDayReady } = useQuery({
+    queryKey: ["lc", "hourly", "day", today],
+    queryFn: () => hourlyByDayFn({ data: { day: today } }),
+    enabled: isToday,
+    staleTime: 0,
+    refetchInterval: isToday ? 10000 : false,
+  });
+  const { data: hourlyDow, isFetching: hourlyDowLoading, isSuccess: hourlyDowReady } = useQuery({
+    queryKey: ["lc", "hourly", "dow", dowValue],
+    queryFn: () => hourlyByDowFn({ data: { dow: dowValue, days: 30 } }),
+    enabled: isDow && dowValue >= 0,
+    staleTime: 0,
+  });
 
-  const totals = summary?.today;
-  const hourly = summary?.hourly ?? [];
-  const peak = hourly.reduce(
-    (p, h) => (h.entries + h.exits + h.visits > p.total
-      ? { hour: h.hour, total: h.entries + h.exits + h.visits }
-      : p),
+  const hourlyLoading = isToday ? hourlyByDayLoading && !hourlyByDayReady : hourlyDowLoading && !hourlyDowReady;
+
+  // Only use summary fallback for today — never cross-contaminate with DOW data
+  const hourlyData = isToday
+    ? (hourlyByDay?.hours ?? summary?.hourly ?? [])
+    : (hourlyDowReady ? (hourlyDow?.buckets ?? []) : []);
+
+  const dowMeta = hourlyDow?.meta;
+
+  const totals = isToday ? summary?.today : undefined;
+  const peak = hourlyData.reduce(
+    (p, h) => (h.visits > p.total ? { hour: h.hour, total: h.visits } : p),
     { hour: 0, total: 0 },
   );
 
@@ -58,7 +91,7 @@ function StatisticsPage() {
         <Kpi
           label="Peak hour"
           value={`${String(peak.hour).padStart(2, "0")}:00`}
-          hint={`${peak.total} events`}
+          hint={`${peak.total} customers`}
           icon={Activity}
           tone="accent"
         />
@@ -66,8 +99,32 @@ function StatisticsPage() {
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <h2 className="font-display text-2xl tracking-wider mb-4">Customers entered — today by hour</h2>
-          <HourlyChart hourly={summary?.hourly ?? []} />
+          {/* Filter dropdown header */}
+          <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+            <h2 className="font-display text-2xl tracking-wider">Customers entered — by hour</h2>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="h-9 rounded-lg border border-border bg-input px-3 text-sm outline-none focus:border-primary transition cursor-pointer"
+            >
+              <option value="today">Today (actual)</option>
+              {DOW_LABELS.map((label, i) => (
+                <option key={i} value={`dow:${i}`}>{label} avg (30d)</option>
+              ))}
+            </select>
+          </div>
+          {hourlyLoading ? (
+            <div className="h-56 grid place-items-center text-xs text-muted-foreground animate-pulse">Loading…</div>
+          ) : (
+            <>
+              <HourlyChart hourly={hourlyData} />
+              {isDow && hourlyDow && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {dowMeta?.dow_name} average over last {dowMeta?.days_range} days ({dowMeta?.occurrences} {dowMeta?.dow_name}s)
+                </p>
+              )}
+            </>
+          )}
         </div>
         <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <h2 className="font-display text-2xl tracking-wider mb-4">Customers entered — last 14 days</h2>

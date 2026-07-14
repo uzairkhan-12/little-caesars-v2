@@ -71,6 +71,24 @@ type HourBucketResponse = { hour: number; entries: number; exits: number; events
 type HourlyResponse = { date: string; hours: HourBucketResponse[] };
 type DayBucketResponse = { date: string; entries: number; exits: number; events: number };
 type DailyResponse = { since: string; days: DayBucketResponse[] };
+// DOW API returns averaged buckets
+type HourBucketDowResponse = {
+  hour: number;
+  entries_avg: number;
+  exits_avg: number;
+  events_avg: number;
+  entries_total: number;
+  exits_total: number;
+  events_total: number;
+};
+type HourlyDowResponse = {
+  dow: number;
+  dow_name: string;
+  days_range: number;
+  occurrences: number;
+  since: string;
+  hours: HourBucketDowResponse[];
+};
 export type EventRow = {
   ts: string;
   event_id: string;
@@ -95,6 +113,44 @@ export const getZones = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
   return safeJson<Zones>("/api/zones", { zones: [] });
 });
+
+export const getHourlyByDay = createServerFn({ method: "GET" })
+  .validator((d: { day: string }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertUnlocked();
+    const emptyResponse: HourlyResponse = {
+      date: data.day,
+      hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
+    };
+    const result = await safeJson<HourlyResponse>(`/api/hourly?day=${data.day}`, emptyResponse);
+    return transformHourly(result);
+  });
+
+export const getHourlyByDow = createServerFn({ method: "GET" })
+  .validator((d: { dow: number; days?: number }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertUnlocked();
+    const days = data.days ?? 30;
+    const emptyDow: HourlyDowResponse = {
+      dow: data.dow, dow_name: "", days_range: days, occurrences: 0, since: "",
+      hours: Array.from({ length: 24 }, (_, h) => ({
+        hour: h, entries_avg: 0, exits_avg: 0, events_avg: 0,
+        entries_total: 0, exits_total: 0, events_total: 0,
+      })),
+    };
+    const result = await safeJson<HourlyDowResponse>(
+      `/api/hourly-by-dow?dow=${data.dow}&days=${days}`,
+      emptyDow,
+    );
+    // Map averaged buckets → HourBucket using events_avg as visits
+    const buckets: HourBucket[] = result.hours.map((h) => ({
+      hour: h.hour,
+      entries: Math.round(h.entries_avg),
+      exits: Math.round(h.exits_avg),
+      visits: Math.round(h.events_avg),
+    }));
+    return { buckets, meta: { dow_name: result.dow_name, occurrences: result.occurrences, days_range: result.days_range } };
+  });
 
 export const getHourly = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();

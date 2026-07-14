@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 
 import {
@@ -252,18 +252,22 @@ function Home() {
       </section>
 
       {/* Cameras row */}
-      <section className="mt-10">
-        <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
-        {cameras.length ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {cameras.map((c) => (
-              <CameraTile key={c.entity_id} cam={c} />
-            ))}
-          </div>
-        ) : (
-          <EmptyCard label="No camera" />
-        )}
-      </section>
+      {(() => {
+        const rtspCams = [
+          { id: "cam1", name: "Camera 1" },
+          { id: "cam2", name: "Camera 2" },
+        ];
+        return (
+          <section className="mt-10">
+            <SectionHeader title="Live cameras" hint="2 online" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {rtspCams.map((c) => (
+                <RtspCameraTile key={c.id} id={c.id} name={c.name} />
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Energy section */}
       <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -457,8 +461,8 @@ function ClimateCard({
     swing_modes?: string[];
     friendly_name?: string;
   };
-  const target = Number(attrs.temperature ?? 22);
-  const current = Number(attrs.current_temperature ?? target);
+  const haTarget = Number(attrs.temperature ?? 22);
+  const current = Number(attrs.current_temperature ?? haTarget);
   const humidity = attrs.current_humidity;
   const modes = attrs.hvac_modes ?? ["off", "cool", "heat", "fan_only", "dry"];
   const fanModes = attrs.fan_modes ?? [];
@@ -467,6 +471,56 @@ function ClimateCard({
   const swingMode = attrs.swing_mode;
   const Icon = modeIcons[mode] ?? Snowflake;
   const active = mode !== "off";
+
+  // Optimistic temperature state
+  const [localTemp, setLocalTemp] = useState<number>(haTarget);
+  const [syncing, setSyncing] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revertRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<number | null>(null);
+  const haTargetRef = useRef<number>(haTarget);
+
+  // Keep haTargetRef in sync so revert timeout always uses latest HA value
+  useEffect(() => {
+    haTargetRef.current = haTarget;
+  }, [haTarget]);
+
+  // Sync local temp when HA confirms the new value
+  useEffect(() => {
+    if (pendingRef.current === null) {
+      setLocalTemp(haTarget);
+    } else if (haTarget === pendingRef.current) {
+      // HA confirmed our value — clear revert timer
+      setSyncing(false);
+      pendingRef.current = null;
+      if (revertRef.current) clearTimeout(revertRef.current);
+    }
+  }, [haTarget]);
+
+  const adjustTemp = (delta: number) => {
+    const next = localTemp + delta;
+    setLocalTemp(next);
+    setSyncing(true);
+    pendingRef.current = next;
+
+    // Clear any existing revert timer — user is still clicking
+    if (revertRef.current) clearTimeout(revertRef.current);
+
+    // Debounce: only send to HA after 600ms of no clicks
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onTemp(next);
+
+      // After 15s if HA hasn't confirmed, revert to last known HA value
+      revertRef.current = setTimeout(() => {
+        if (pendingRef.current !== null) {
+          setLocalTemp(haTargetRef.current);
+          setSyncing(false);
+          pendingRef.current = null;
+        }
+      }, 15000);
+    }, 600);
+  };
 
   const accentText = "text-primary";
   const accentBg = "bg-primary/20 text-primary";
@@ -503,25 +557,33 @@ function ClimateCard({
             <div className="text-[11px] text-muted-foreground mt-0.5">{humidity}% humidity</div>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => onTemp(target - 1)}
-            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-            aria-label="Decrease"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          <div className="text-center min-w-[56px]">
-            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
-            <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>{target}°</div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => adjustTemp(-1)}
+              className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
+              aria-label="Decrease"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <div className="text-center min-w-[56px]">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
+              <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>
+                {localTemp}°
+              </div>
+            </div>
+            <button
+              onClick={() => adjustTemp(1)}
+              className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
+              aria-label="Increase"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            onClick={() => onTemp(target + 1)}
-            className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-            aria-label="Increase"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          {/* Sync status indicator */}
+          {syncing && (
+            <span className="text-[10px] text-muted-foreground animate-pulse">Updating…</span>
+          )}
         </div>
       </div>
 
@@ -694,6 +756,96 @@ function CameraTile({ cam }: { cam: HAState }) {
             <img
               src={`/api/camera/${cam.entity_id}?stream=1`}
               alt={cam.entity_id}
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RtspCameraTile({ id, name }: { id: string; name: string }) {
+  const [full, setFull] = useState(false);
+  const streamUrl = `/api/rtsp/${id}`;
+
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [full]);
+
+  return (
+    <>
+      <div className="rounded-2xl overflow-hidden border border-border bg-gradient-card shadow-soft">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary grid place-items-center">
+              <Video className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-display text-lg tracking-wider">{name}</div>
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
+                LIVE · HD
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setFull(true)}
+            className="w-9 h-9 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary grid place-items-center transition-colors"
+            aria-label="Fullscreen"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setFull(true)}
+          className="relative aspect-video bg-black w-full block group"
+          aria-label={`Expand ${name}`}
+        >
+          <img
+            src={streamUrl}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }}
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
+            <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
+          </div>
+        </button>
+      </div>
+
+      {full && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in"
+          onClick={() => setFull(false)}
+        >
+          <div className="flex items-center justify-between p-4 text-white">
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+              <span className="font-display text-xl tracking-wider">{name}</span>
+              <span className="text-[11px] uppercase tracking-widest text-white/60">Live · HD</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setFull(false); }}
+              className="w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={streamUrl}
+              alt={name}
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
             />
           </div>
