@@ -97,8 +97,8 @@ function StatisticsPage() {
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           {/* Filter dropdown header */}
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
             <h2 className="font-display text-2xl tracking-wider">Customers entered — by hour</h2>
@@ -126,7 +126,7 @@ function StatisticsPage() {
             </>
           )}
         </div>
-        <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <h2 className="font-display text-2xl tracking-wider mb-4">Customers entered — last 14 days</h2>
           <DailyChart days={daily?.days ?? []} />
         </div>
