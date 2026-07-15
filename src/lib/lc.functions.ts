@@ -42,15 +42,17 @@ function transformToday(data: TodayResponse): Today {
 }
 
 function transformHourly(data: HourlyResponse): Hourly {
-  return {
-    date: data.date,
-    hours: data.hours.map((h) => ({
+  const hours = data.hours
+    .map((h) => ({
       hour: toLocalHour(h.hour),
       entries: h.entries,
       exits: h.exits,
       visits: h.events,
-    })),
-  };
+    }))
+    // Re-sort ascending by local hour so charts start at 12 AM instead of
+    // following the original UTC bucket order (which now wraps mid-array).
+    .sort((a, b) => a.hour - b.hour);
+  return { date: data.date, hours };
 }
 
 function transformDaily(data: DailyResponse): Daily {
@@ -150,13 +152,16 @@ export const getHourlyByDow = createServerFn({ method: "GET" })
       `/api/hourly-by-dow?dow=${data.dow}&days=${days}`,
       emptyDow,
     );
-    // Map averaged buckets → HourBucket using events_avg as visits
-    const buckets: HourBucket[] = result.hours.map((h) => ({
-      hour: toLocalHour(h.hour),
-      entries: Math.round(h.entries_avg),
-      exits: Math.round(h.exits_avg),
-      visits: Math.round(h.events_avg),
-    }));
+    // Map averaged buckets → HourBucket using events_avg as visits, then
+    // re-sort ascending by local hour so charts start at 12 AM.
+    const buckets: HourBucket[] = result.hours
+      .map((h) => ({
+        hour: toLocalHour(h.hour),
+        entries: Math.round(h.entries_avg),
+        exits: Math.round(h.exits_avg),
+        visits: Math.round(h.events_avg),
+      }))
+      .sort((a, b) => a.hour - b.hour);
     return { buckets, meta: { dow_name: result.dow_name, occurrences: result.occurrences, days_range: result.days_range } };
   });
 
