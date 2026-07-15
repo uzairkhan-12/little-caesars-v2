@@ -13,10 +13,16 @@ export const Route = createFileRoute("/api/camera/$entity")({
         const endpoint = stream
           ? `${url}/api/camera_proxy_stream/${encodeURIComponent(params.entity)}`
           : `${url}/api/camera_proxy/${encodeURIComponent(params.entity)}`;
-        const res = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok || !res.body) return new Response("Camera unavailable", { status: res.status });
+        let res: Response;
+        try {
+          res = await fetch(endpoint, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch (err) {
+          console.error("[camera] fetch error", endpoint, err instanceof Error ? err.message : err);
+          return new Response("Camera unavailable", { status: 502 });
+        }
+        if (!res.ok || !res.body) return new Response("Camera unavailable", { status: res.status || 502 });
         return new Response(res.body, {
           status: 200,
           headers: {
