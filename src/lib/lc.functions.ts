@@ -23,6 +23,14 @@ async function safeJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+// The lclogic API buckets hours in GMT/UTC, but the restaurant is in Riyadh
+// (GMT+3) — shift every hour-of-day bucket so displayed hours match local
+// time, e.g. API hour 0 (00:00-01:00 UTC) is actually 3 AM in Riyadh.
+const RIYADH_UTC_OFFSET_HOURS = 3;
+function toLocalHour(utcHour: number): number {
+  return (utcHour + RIYADH_UTC_OFFSET_HOURS) % 24;
+}
+
 // Transform functions to convert 'events' field to 'visits'
 function transformToday(data: TodayResponse): Today {
   return {
@@ -37,7 +45,7 @@ function transformHourly(data: HourlyResponse): Hourly {
   return {
     date: data.date,
     hours: data.hours.map((h) => ({
-      hour: h.hour,
+      hour: toLocalHour(h.hour),
       entries: h.entries,
       exits: h.exits,
       visits: h.events,
@@ -144,7 +152,7 @@ export const getHourlyByDow = createServerFn({ method: "GET" })
     );
     // Map averaged buckets → HourBucket using events_avg as visits
     const buckets: HourBucket[] = result.hours.map((h) => ({
-      hour: h.hour,
+      hour: toLocalHour(h.hour),
       entries: Math.round(h.entries_avg),
       exits: Math.round(h.exits_avg),
       visits: Math.round(h.events_avg),
