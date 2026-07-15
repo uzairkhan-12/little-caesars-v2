@@ -693,6 +693,17 @@ function ClimateCard({
 function CameraTile({ name, src }: { name: string; src: string }) {
   const [full, setFull] = useState(false);
   const [error, setError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const lastFrameAtRef = useRef(Date.now());
+
+  // Cache-bust the src on every reconnect attempt so the browser always opens
+  // a brand-new request instead of reusing a dead one.
+  const liveSrc = `${src}${src.includes("?") ? "&" : "?"}_r=${reloadNonce}`;
+
+  const reconnect = () => {
+    lastFrameAtRef.current = Date.now();
+    setReloadNonce((n) => n + 1);
+  };
 
   useEffect(() => {
     if (!full) return;
@@ -707,6 +718,31 @@ function CameraTile({ name, src }: { name: string; src: string }) {
       document.body.style.overflow = prev;
     };
   }, [full]);
+
+  // Auto-retry a failed stream instead of making the user click "Retry".
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => {
+      setError(false);
+      reconnect();
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  // MJPEG streams (HA's camera_proxy_stream in particular) can silently stop
+  // delivering new frames after a while without ever firing the <img>
+  // "error" event — the tile just freezes/goes blank until the page is
+  // reloaded. Watch for stale frames and force a fresh connection instead.
+  useEffect(() => {
+    lastFrameAtRef.current = Date.now();
+    const STALE_MS = 15000;
+    const id = setInterval(() => {
+      if (!error && Date.now() - lastFrameAtRef.current > STALE_MS) {
+        reconnect();
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [error, reloadNonce]);
 
   return (
     <>
@@ -749,6 +785,7 @@ function CameraTile({ name, src }: { name: string; src: string }) {
                 onClick={(e) => {
                   e.stopPropagation();
                   setError(false);
+                  reconnect();
                 }}
                 className="text-xs text-primary underline mt-1"
               >
@@ -758,11 +795,14 @@ function CameraTile({ name, src }: { name: string; src: string }) {
           ) : (
             <>
               <img
-                src={src}
+                src={liveSrc}
                 alt={name}
                 className="w-full h-full object-cover"
                 onError={() => setError(true)}
-                onLoad={() => setError(false)}
+                onLoad={() => {
+                  setError(false);
+                  lastFrameAtRef.current = Date.now();
+                }}
               />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
                 <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
@@ -796,9 +836,14 @@ function CameraTile({ name, src }: { name: string; src: string }) {
           </div>
           <div className="flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
             <img
-              src={src}
+              src={liveSrc}
               alt={name}
               className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+              onError={() => setError(true)}
+              onLoad={() => {
+                setError(false);
+                lastFrameAtRef.current = Date.now();
+              }}
             />
           </div>
         </div>
