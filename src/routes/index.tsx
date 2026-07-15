@@ -35,7 +35,6 @@ import {
 import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
-import { getRtspCameras } from "@/lib/rtsp.functions";
 import { formatHour12 } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -53,7 +52,6 @@ function Home() {
   const summaryFn = useServerFn(getSummary);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
-  const rtspCamerasFn = useServerFn(getRtspCameras);
   const qc = useQueryClient();
 
   const summary = useQuery({
@@ -68,12 +66,6 @@ function Home() {
     refetchInterval: 6000,
     staleTime: 0,
   });
-  const rtspCameras = useQuery({
-    queryKey: ["rtsp", "cameras"],
-    queryFn: () => rtspCamerasFn(),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const call = useMutation({
     mutationFn: (v: { domain: string; service: string; entity_id: string; data?: Record<string, unknown> }) =>
       callFn({ data: v }),
@@ -83,6 +75,7 @@ function Home() {
   const data = states.data ?? [];
   const climates = data.filter((e) => e.entity_id.startsWith("climate."));
   const lights = data.filter((e) => e.entity_id.startsWith("light."));
+  const cameras = data.filter((e) => e.entity_id.startsWith("camera."));
   const power = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_power");
   const voltage = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_voltage");
   const energy = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_energy");
@@ -267,17 +260,21 @@ function Home() {
         </div>
       </section>
 
-      {/* Live cameras row (direct RTSP via go2rtc, bypasses HA's lower-res proxy) */}
+      {/* Cameras row (Home Assistant proxy) */}
       <section className="mt-10">
-        <SectionHeader title="Live cameras" hint={`${(rtspCameras.data ?? []).length} online`} />
-        {(rtspCameras.data ?? []).length ? (
+        <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
+        {cameras.length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {(rtspCameras.data ?? []).map((c) => (
-              <CameraTile key={c.id} name={c.name} src={`/api/rtsp/${c.id}?stream=1`} />
+            {cameras.map((c) => (
+              <CameraTile
+                key={c.entity_id}
+                name={c.attributes.friendly_name ?? c.entity_id}
+                src={`/api/camera/${c.entity_id}?stream=1`}
+              />
             ))}
           </div>
         ) : (
-          <EmptyCard label="No camera configured" />
+          <EmptyCard label="No camera" />
         )}
       </section>
 

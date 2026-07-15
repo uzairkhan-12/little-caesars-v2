@@ -13,7 +13,6 @@ import { Route as StatisticsRouteImport } from './routes/statistics'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiRtspEntityRouteImport } from './routes/api/rtsp.$entity'
 import { Route as ApiHaWsRouteImport } from './routes/api/ha.ws'
 import { Route as ApiCameraEntityRouteImport } from './routes/api/camera.$entity'
 
@@ -37,11 +36,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiRtspEntityRoute = ApiRtspEntityRouteImport.update({
-  id: '/api/rtsp/$entity',
-  path: '/api/rtsp/$entity',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiHaWsRoute = ApiHaWsRouteImport.update({
   id: '/api/ha/ws',
   path: '/api/ha/ws',
@@ -60,7 +54,6 @@ export interface FileRoutesByFullPath {
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
   '/api/ha/ws': typeof ApiHaWsRoute
-  '/api/rtsp/$entity': typeof ApiRtspEntityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,7 +62,6 @@ export interface FileRoutesByTo {
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
   '/api/ha/ws': typeof ApiHaWsRoute
-  '/api/rtsp/$entity': typeof ApiRtspEntityRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,7 +71,6 @@ export interface FileRoutesById {
   '/statistics': typeof StatisticsRoute
   '/api/camera/$entity': typeof ApiCameraEntityRoute
   '/api/ha/ws': typeof ApiHaWsRoute
-  '/api/rtsp/$entity': typeof ApiRtspEntityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,7 +81,6 @@ export interface FileRouteTypes {
     | '/statistics'
     | '/api/camera/$entity'
     | '/api/ha/ws'
-    | '/api/rtsp/$entity'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -99,7 +89,6 @@ export interface FileRouteTypes {
     | '/statistics'
     | '/api/camera/$entity'
     | '/api/ha/ws'
-    | '/api/rtsp/$entity'
   id:
     | '__root__'
     | '/'
@@ -108,7 +97,6 @@ export interface FileRouteTypes {
     | '/statistics'
     | '/api/camera/$entity'
     | '/api/ha/ws'
-    | '/api/rtsp/$entity'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -118,7 +106,6 @@ export interface RootRouteChildren {
   StatisticsRoute: typeof StatisticsRoute
   ApiCameraEntityRoute: typeof ApiCameraEntityRoute
   ApiHaWsRoute: typeof ApiHaWsRoute
-  ApiRtspEntityRoute: typeof ApiRtspEntityRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -151,13 +138,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/rtsp/$entity': {
-      id: '/api/rtsp/$entity'
-      path: '/api/rtsp/$entity'
-      fullPath: '/api/rtsp/$entity'
-      preLoaderRoute: typeof ApiRtspEntityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/ha/ws': {
       id: '/api/ha/ws'
       path: '/api/ha/ws'
@@ -182,7 +162,6 @@ const rootRouteChildren: RootRouteChildren = {
   StatisticsRoute: StatisticsRoute,
   ApiCameraEntityRoute: ApiCameraEntityRoute,
   ApiHaWsRoute: ApiHaWsRoute,
-  ApiRtspEntityRoute: ApiRtspEntityRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

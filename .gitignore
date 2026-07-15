@@ -31,4 +31,3 @@ dist-ssr
 *.sln
 *.sw?
 .env
-deploy/go2rtc/go2rtc.yaml
