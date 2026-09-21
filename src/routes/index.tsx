@@ -633,18 +633,10 @@ function PhaseMeterCard({
         {phase(stats.voltage, 2, "V")}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
-        <div className="flex justify-between items-center gap-3">
-          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Today Energy</span>
-          <span className="font-semibold tabular-nums">{fmtMetric(stats.energy, 2, "kWh")}</span>
-        </div>
-        <div className="flex justify-between items-center gap-3">
+      <div className="mt-4 pt-4 border-t border-border/50">
+        <div className="flex justify-between items-center gap-3 text-xs">
           <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Today Total Energy</span>
           <span className="font-semibold tabular-nums text-accent">{fmtMetric(stats.totalEnergy, 2, "kWh")}</span>
-        </div>
-        <div className="flex justify-between items-center gap-3">
-          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Total Power</span>
-          <span className="font-semibold tabular-nums text-primary">{fmtMetric(stats.totalPower, 2, "W")}</span>
         </div>
       </div>
     </div>
