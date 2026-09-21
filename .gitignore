@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Energy snapshot logs / temp files. Keep data/energy-reports.json in git (empty starter).
+data/*.json.tmp
+data/*.log
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

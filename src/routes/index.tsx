@@ -35,6 +35,8 @@ import {
 import { Toggle } from "@/components/Toggle";
 import { getSummary } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
+import { getEnergyBaselines } from "@/lib/energy-reports.functions";
+import { sumTodayConsumption, todayConsumption } from "@/lib/energy-devices";
 import { formatHour12 } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Home });
@@ -151,12 +153,13 @@ function lightDevicePrefix(entityId: string): string | undefined {
   return undefined;
 }
 
-function lightDeviceStats(data: HAState[], lightEntityId: string) {
+function lightDeviceStats(data: HAState[], lightEntityId: string, baselines: Record<string, number>) {
   const prefix = lightDevicePrefix(lightEntityId);
   if (!prefix) return null;
+  const energyId = `${prefix}_energy`;
   return {
     current: haNumericState(data, `${prefix}_current`),
-    energy: haNumericState(data, `${prefix}_energy`),
+    energy: todayConsumption(haNumericState(data, energyId), baselines[energyId]),
     power: haNumericState(data, `${prefix}_power`),
     temperature: haNumericState(data, `${prefix}_temperature`),
     voltage: haNumericState(data, `${prefix}_voltage`),
@@ -189,13 +192,20 @@ function phaseValues(
   };
 }
 
-function threePhaseMeterStats(data: HAState[], prefix: string) {
+function threePhaseMeterStats(
+  data: HAState[],
+  prefix: string,
+  baselines: Record<string, number>,
+) {
   return {
     current: phaseValues(data, prefix, "current"),
     power: phaseValues(data, prefix, "power"),
     voltage: phaseValues(data, prefix, "voltage"),
-    energy: haNumericState(data, `${prefix}_energy`),
-    totalEnergy: haNumericState(data, `${prefix}_total_energy`),
+    energy: todayConsumption(haNumericState(data, `${prefix}_energy`), baselines[`${prefix}_energy`]),
+    totalEnergy: todayConsumption(
+      haNumericState(data, `${prefix}_total_energy`),
+      baselines[`${prefix}_total_energy`],
+    ),
     totalPower: haNumericState(data, `${prefix}_power`),
   };
 }
@@ -204,6 +214,7 @@ function Home() {
   const summaryFn = useServerFn(getSummary);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
+  const baselinesFn = useServerFn(getEnergyBaselines);
   const qc = useQueryClient();
 
   const summary = useQuery({
@@ -218,6 +229,12 @@ function Home() {
     refetchInterval: 6000,
     staleTime: 0,
   });
+  const energyBaselines = useQuery({
+    queryKey: ["energy-baselines"],
+    queryFn: () => baselinesFn(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
   const call = useMutation({
     mutationFn: (v: { domain: string; service: string; entity_id: string; data?: Record<string, unknown> }) =>
       callFn({ data: v }),
@@ -225,12 +242,18 @@ function Home() {
   });
 
   const data = states.data ?? [];
+  const baselines = energyBaselines.data ?? {};
   const climates = data.filter((e) => e.entity_id.startsWith("climate."));
   const lights = data.filter((e) => e.entity_id.startsWith("light."));
   const cameras = data.filter((e) => e.entity_id.startsWith("camera."));
 
   const lightsTotalPower = sumLightMetrics(data, "power");
-  const lightsTotalEnergy = sumLightMetrics(data, "energy", false);
+  const lightsTotalEnergy = sumTodayConsumption(
+    LIGHT_ENERGY_DEVICES.map((prefix) => {
+      const id = lightEntity(prefix, "energy");
+      return todayConsumption(haNumericState(data, id), baselines[id]);
+    }),
+  );
   const lightsTotalCurrent = sumLightMetrics(data, "current");
   const lightsAvgVoltage = avgLightMetrics(data, "voltage");
   const lightsAvgTemp = avgLightMetrics(data, "temperature");
@@ -238,16 +261,27 @@ function Home() {
   // Live AC energy: polled via getStates and patched in real time by the HA websocket.
   const energyMap: Record<string, { current: string; power: string; energy: string }> = {};
   for (const [climateId, ch] of Object.entries(AC_ENERGY_CHANNEL)) {
+    const energyId = acChannelEntity(ch, "energy");
+    const used = todayConsumption(haNumericState(data, energyId), baselines[energyId]);
     energyMap[climateId] = {
       current: haMetric(data, acChannelEntity(ch, "current")),
       power: haMetric(data, acChannelEntity(ch, "power")),
-      energy: haMetric(data, acChannelEntity(ch, "energy")),
+      energy: used == null ? "N/A" : String(used),
     };
   }
 
   const acTotalPower = sumAbsChannels(data, "power");
   const acTotalCurrent = sumAbsChannels(data, "current");
-  const acTotalEnergy = haNumericState(data, "sensor.ac_energy_monitor_energy1_energy_total");
+  const acTotalId = "sensor.ac_energy_monitor_energy1_energy_total";
+  const acTotalEnergy =
+    baselines[acTotalId] != null
+      ? todayConsumption(haNumericState(data, acTotalId), baselines[acTotalId])
+      : sumTodayConsumption(
+          AC_ENERGY_TOTAL_CHANNELS.map((ch) => {
+            const id = acChannelEntity(ch, "energy");
+            return todayConsumption(haNumericState(data, id), baselines[id]);
+          }),
+        );
   const acVoltage = haNumericState(data, "sensor.ac_energy_monitor_energy1_voltage");
   const acTemp = haNumericState(data, "sensor.ac_energy_monitor_energy1_temperature");
 
@@ -376,7 +410,7 @@ function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {lights.map((l) => {
             const on = l.state === "on";
-            const device = lightDeviceStats(data, l.entity_id);
+            const device = lightDeviceStats(data, l.entity_id, baselines);
             return (
               <div
                 key={l.entity_id}
@@ -419,7 +453,7 @@ function Home() {
                       [
                         ["Current", fmtMetric(device.current, 2, "A")],
                         ["Power", fmtMetric(device.power, 2, "W")],
-                        ["Energy", fmtMetric(device.energy, 2, "kWh")],
+                        ["Today Energy", fmtMetric(device.energy, 2, "kWh")],
                         ["Temperature", fmtMetric(device.temperature, 1, "°C")],
                         ["Voltage", fmtMetric(device.voltage, 2, "V")],
                       ] as const
@@ -463,7 +497,7 @@ function Home() {
           {/* Lights Energy */}
           <EnergyMeterCard
             title="Lights Energy"
-            hint="Lighting system"
+            hint="Today's consumption"
             power={lightsTotalPower}
             energy={lightsTotalEnergy}
             current={lightsTotalCurrent}
@@ -474,7 +508,7 @@ function Home() {
           {/* AC Energy */}
           <EnergyMeterCard
             title="AC Energy"
-            hint="Climate system"
+            hint="Today's consumption"
             power={acTotalPower}
             energy={acTotalEnergy}
             current={acTotalCurrent}
@@ -487,7 +521,7 @@ function Home() {
               key={meter.prefix}
               title={meter.title}
               hint={meter.hint}
-              stats={threePhaseMeterStats(data, meter.prefix)}
+                  stats={threePhaseMeterStats(data, meter.prefix, baselines)}
             />
           ))}
         </div>
@@ -601,11 +635,11 @@ function PhaseMeterCard({
 
       <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
         <div className="flex justify-between items-center gap-3">
-          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Energy</span>
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Today Energy</span>
           <span className="font-semibold tabular-nums">{fmtMetric(stats.energy, 2, "kWh")}</span>
         </div>
         <div className="flex justify-between items-center gap-3">
-          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Total Energy</span>
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Today Total Energy</span>
           <span className="font-semibold tabular-nums text-accent">{fmtMetric(stats.totalEnergy, 2, "kWh")}</span>
         </div>
         <div className="flex justify-between items-center gap-3">
@@ -646,7 +680,7 @@ function EnergyMeterCard({
           tone="primary"
         />
         <BigMetric
-          label="Total Energy"
+          label="Today Energy"
           value={energy != null ? energy.toFixed(2) : "0"}
           unit="kWh"
           tone="accent"
@@ -935,7 +969,7 @@ function ClimateCard({
           <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${parseFloat(energy.power).toFixed(2)} W`}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Energy</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Today Energy</span>
           <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? "N/A" : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
         </div>
       </div>

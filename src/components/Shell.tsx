@@ -12,6 +12,7 @@ const allTabs: Array<{ to: string; label: string; exact?: boolean; adminOnly?: b
   { to: "/", label: "Home", exact: true },
   { to: "/statistics", label: "Statistics", adminOnly: true },
   { to: "/schedules", label: "Schedules", adminOnly: true },
+  { to: "/reports", label: "Reports", adminOnly: true },
 ];
 
 export function Header() {
