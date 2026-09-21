@@ -48,6 +48,158 @@ const modeIcons: Record<string, typeof Snowflake> = {
   auto: Sun,
 };
 
+/** AC climate entity → energy-monitor channel (ch1 = Kitchen Area, etc.). */
+const AC_ENERGY_CHANNEL: Record<string, number> = {
+  "climate.kitchen_area": 1,
+  "climate.office_area": 2,
+  "climate.oven_area": 3,
+  "climate.sheeter_area": 4,
+  "climate.dining_area_right": 6,
+  "climate.dining_area_left": 7,
+};
+
+/** Totals on the AC Energy card: ch1 through ch7 inclusive. */
+const AC_ENERGY_TOTAL_CHANNELS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+/** Five smart lighting breakers: counter, kitchen, office, oven, dining. */
+const LIGHT_ENERGY_DEVICES = [
+  "sensor.smart_circuit_breaker_counter_lights",
+  "sensor.smart_circuit_breaker_kitchen_lights",
+  "sensor.smart_circuit_breaker_office_lights",
+  "sensor.smart_circuit_breaker_oven_lights",
+  "sensor.smart_energy_breaker",
+] as const;
+
+/** Light entity → smart-breaker sensor prefix (device info: current/energy/power/temp/voltage). */
+const LIGHT_DEVICE_PREFIX: Record<string, (typeof LIGHT_ENERGY_DEVICES)[number]> = {
+  "light.dining_lights": "sensor.smart_energy_breaker",
+  "light.smart_circuit_breaker_counter_lights": "sensor.smart_circuit_breaker_counter_lights",
+  "light.smart_circuit_breaker_kitchen_lights": "sensor.smart_circuit_breaker_kitchen_lights",
+  "light.smart_circuit_breaker_office_lights": "sensor.smart_circuit_breaker_office_lights",
+  "light.smart_circuit_breaker_oven_lights": "sensor.smart_circuit_breaker_oven_lights",
+};
+
+function acChannelEntity(ch: number, metric: "current" | "power" | "energy") {
+  return `sensor.ac_energy_monitor_energy1_ch${ch}_${metric}`;
+}
+
+function haNumericState(data: HAState[], entityId: string): number | null {
+  const raw = data.find((e) => e.entity_id === entityId)?.state;
+  if (raw == null || raw === "" || raw === "unknown" || raw === "unavailable") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function haMetric(data: HAState[], entityId: string): string {
+  const n = haNumericState(data, entityId);
+  return n == null ? "N/A" : String(n);
+}
+
+function sumAbsChannels(data: HAState[], metric: "current" | "power"): number | null {
+  let any = false;
+  let sum = 0;
+  for (const ch of AC_ENERGY_TOTAL_CHANNELS) {
+    const n = haNumericState(data, acChannelEntity(ch, metric));
+    if (n == null) continue;
+    any = true;
+    sum += Math.abs(n);
+  }
+  return any ? sum : null;
+}
+
+function lightEntity(
+  prefix: (typeof LIGHT_ENERGY_DEVICES)[number],
+  metric: "current" | "power" | "energy" | "voltage" | "temperature",
+) {
+  return `${prefix}_${metric}`;
+}
+
+function collectLightMetrics(
+  data: HAState[],
+  metric: "current" | "power" | "energy" | "voltage" | "temperature",
+): number[] {
+  const values: number[] = [];
+  for (const prefix of LIGHT_ENERGY_DEVICES) {
+    const n = haNumericState(data, lightEntity(prefix, metric));
+    if (n != null) values.push(n);
+  }
+  return values;
+}
+
+function sumLightMetrics(
+  data: HAState[],
+  metric: "current" | "power" | "energy",
+  abs = true,
+): number | null {
+  const values = collectLightMetrics(data, metric);
+  if (!values.length) return null;
+  return values.reduce((sum, n) => sum + (abs ? Math.abs(n) : n), 0);
+}
+
+function avgLightMetrics(
+  data: HAState[],
+  metric: "voltage" | "temperature",
+): number | null {
+  const values = collectLightMetrics(data, metric);
+  if (!values.length) return null;
+  return values.reduce((sum, n) => sum + n, 0) / values.length;
+}
+
+function lightDevicePrefix(entityId: string): string | undefined {
+  if (LIGHT_DEVICE_PREFIX[entityId]) return LIGHT_DEVICE_PREFIX[entityId];
+  if (entityId.startsWith("light.")) return `sensor.${entityId.slice("light.".length)}`;
+  return undefined;
+}
+
+function lightDeviceStats(data: HAState[], lightEntityId: string) {
+  const prefix = lightDevicePrefix(lightEntityId);
+  if (!prefix) return null;
+  return {
+    current: haNumericState(data, `${prefix}_current`),
+    energy: haNumericState(data, `${prefix}_energy`),
+    power: haNumericState(data, `${prefix}_power`),
+    temperature: haNumericState(data, `${prefix}_temperature`),
+    voltage: haNumericState(data, `${prefix}_voltage`),
+  };
+}
+
+function fmtMetric(n: number | null, digits: number, unit: string) {
+  return n == null ? "N/A" : `${n.toFixed(digits)} ${unit}`;
+}
+
+const THREE_PHASE_METERS = [
+  { prefix: "sensor.oven_energy_meter", title: "Oven Energy", hint: "Oven" },
+  { prefix: "sensor.freezer_energy_meter", title: "Freezer Energy", hint: "Freezer" },
+  { prefix: "sensor.chiller_energy_meter", title: "Chiller Energy", hint: "Chiller" },
+] as const;
+
+const PHASE_LEGS = ["a", "b", "c"] as const;
+
+type PhaseValues = { a: number | null; b: number | null; c: number | null };
+
+function phaseValues(
+  data: HAState[],
+  prefix: string,
+  metric: "current" | "power" | "voltage",
+): PhaseValues {
+  return {
+    a: haNumericState(data, `${prefix}_${metric}_a`),
+    b: haNumericState(data, `${prefix}_${metric}_b`),
+    c: haNumericState(data, `${prefix}_${metric}_c`),
+  };
+}
+
+function threePhaseMeterStats(data: HAState[], prefix: string) {
+  return {
+    current: phaseValues(data, prefix, "current"),
+    power: phaseValues(data, prefix, "power"),
+    voltage: phaseValues(data, prefix, "voltage"),
+    energy: haNumericState(data, `${prefix}_energy`),
+    totalEnergy: haNumericState(data, `${prefix}_total_energy`),
+    totalPower: haNumericState(data, `${prefix}_power`),
+  };
+}
+
 function Home() {
   const summaryFn = useServerFn(getSummary);
   const statesFn = useServerFn(getStates);
@@ -76,25 +228,28 @@ function Home() {
   const climates = data.filter((e) => e.entity_id.startsWith("climate."));
   const lights = data.filter((e) => e.entity_id.startsWith("light."));
   const cameras = data.filter((e) => e.entity_id.startsWith("camera."));
-  const power = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_power");
-  const voltage = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_voltage");
-  const energy = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_energy");
-  const breakerTemp = data.find((e) => e.entity_id === "sensor.smart_energy_breaker_temperature");
-  const weather = data.find((e) => e.entity_id.startsWith("weather."));
 
-  // Energy monitoring for AC units
-  const energyMap: Record<string, { current: string; power: string; energy: string }> = {
-    "climate.kitchen_1": {
-      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "N/A",
-      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_1")?.state ?? "N/A",
-      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_1")?.state ?? "N/A",
-    },
-    "climate.office": {
-      current: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "N/A",
-      power: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_2")?.state ?? "N/A",
-      energy: data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_2")?.state ?? "N/A",
-    },
-  };
+  const lightsTotalPower = sumLightMetrics(data, "power");
+  const lightsTotalEnergy = sumLightMetrics(data, "energy", false);
+  const lightsTotalCurrent = sumLightMetrics(data, "current");
+  const lightsAvgVoltage = avgLightMetrics(data, "voltage");
+  const lightsAvgTemp = avgLightMetrics(data, "temperature");
+
+  // Live AC energy: polled via getStates and patched in real time by the HA websocket.
+  const energyMap: Record<string, { current: string; power: string; energy: string }> = {};
+  for (const [climateId, ch] of Object.entries(AC_ENERGY_CHANNEL)) {
+    energyMap[climateId] = {
+      current: haMetric(data, acChannelEntity(ch, "current")),
+      power: haMetric(data, acChannelEntity(ch, "power")),
+      energy: haMetric(data, acChannelEntity(ch, "energy")),
+    };
+  }
+
+  const acTotalPower = sumAbsChannels(data, "power");
+  const acTotalCurrent = sumAbsChannels(data, "current");
+  const acTotalEnergy = haNumericState(data, "sensor.ac_energy_monitor_energy1_energy_total");
+  const acVoltage = haNumericState(data, "sensor.ac_energy_monitor_energy1_voltage");
+  const acTemp = haNumericState(data, "sensor.ac_energy_monitor_energy1_temperature");
 
   const s = summary.data;
   const total = s?.counts.total ?? 0;
@@ -221,23 +376,28 @@ function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {lights.map((l) => {
             const on = l.state === "on";
+            const device = lightDeviceStats(data, l.entity_id);
             return (
               <div
                 key={l.entity_id}
                 className={`rounded-2xl border p-5 shadow-soft transition-all ${
-                  on ? "bg-gradient-brand border-primary shadow-glow" : "bg-gradient-card border-border"
+                  on
+                    ? "bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border-primary/40"
+                    : "bg-gradient-card border-border"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl grid place-items-center ${on ? "bg-white/20" : "bg-muted"}`}>
-                      <Lightbulb className={`w-6 h-6 ${on ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-12 h-12 rounded-xl grid place-items-center shrink-0 ${
+                        on ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Lightbulb className="w-6 h-6" />
                     </div>
-                    <div>
-                      <div className={`font-medium ${on ? "text-primary-foreground" : ""}`}>
-                        {l.attributes.friendly_name ?? l.entity_id}
-                      </div>
-                      <div className={`text-[11px] ${on ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{l.attributes.friendly_name ?? l.entity_id}</div>
+                      <div className={`text-[11px] ${on ? "text-primary/80" : "text-muted-foreground"}`}>
                         {on ? "On" : "Off"}
                       </div>
                     </div>
@@ -253,6 +413,24 @@ function Home() {
                     }
                   />
                 </div>
+                {device && (
+                  <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
+                    {(
+                      [
+                        ["Current", fmtMetric(device.current, 2, "A")],
+                        ["Power", fmtMetric(device.power, 2, "W")],
+                        ["Energy", fmtMetric(device.energy, 2, "kWh")],
+                        ["Temperature", fmtMetric(device.temperature, 1, "°C")],
+                        ["Voltage", fmtMetric(device.voltage, 2, "V")],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div key={label} className="flex justify-between items-center gap-3">
+                        <span className="uppercase tracking-wider text-[10px] text-muted-foreground">{label}</span>
+                        <span className={`font-semibold tabular-nums ${on ? "text-primary" : ""}`}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -283,74 +461,35 @@ function Home() {
         <SectionHeader title="Daily Power / Energy usage" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Lights Energy */}
-          <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-            <SectionHeader title="Lights Energy" hint="Lighting system" inline />
-            <div className="space-y-4">
-              <BigMetric label="Power draw" value={power ? `${power.state}` : "0"} unit="W" tone="primary" />
-              <BigMetric label="Total energy" value={energy ? `${energy.state}` : "0"} unit="kWh" tone="accent" />
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-                <MiniStat icon={Activity} label="Voltage" value={voltage ? `${voltage.state} V` : "—"} />
-                <MiniStat icon={Thermometer} label="Temp" value={breakerTemp ? `${breakerTemp.state}°C` : "—"} />
-              </div>
-            </div>
-          </div>
+          <EnergyMeterCard
+            title="Lights Energy"
+            hint="Lighting system"
+            power={lightsTotalPower}
+            energy={lightsTotalEnergy}
+            current={lightsTotalCurrent}
+            voltage={lightsAvgVoltage}
+            temp={lightsAvgTemp}
+          />
 
           {/* AC Energy */}
-          <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-            <SectionHeader title="AC Energy" hint="Climate system" inline />
-            <div className="space-y-4">
-              <BigMetric
-                label="Total Power"
-                value={
-                  data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state
-                    ? Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_power_sum")?.state).toFixed(2)
-                    : "0"
-                }
-                unit="W"
-                tone="primary"
-              />
-              <BigMetric
-                label="Total Energy"
-                value={
-                  data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state
-                    ? Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_energy_sum")?.state).toFixed(2)
-                    : "0"
-                }
-                unit="kWh"
-                tone="accent"
-              />
-              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/50">
-                <MiniStat
-                  icon={Activity}
-                  label="Current"
-                  value={(() => {
-                    const c1 = parseFloat(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_1")?.state ?? "");
-                    const c2 = parseFloat(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_current_2")?.state ?? "");
-                    if (isNaN(c1) && isNaN(c2)) return "—";
-                    return `${((isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2)).toFixed(2)} A`;
-                  })()}
-                />
-                <MiniStat
-                  icon={Activity}
-                  label="Voltage"
-                  value={
-                    data.find((e) => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state
-                      ? `${Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_voltage")?.state).toFixed(2)} V`
-                      : "—"
-                  }
-                />
-                <MiniStat
-                  icon={Thermometer}
-                  label="Temp"
-                  value={
-                    data.find((e) => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state
-                      ? `${Number(data.find((e) => e.entity_id === "sensor.demo_energy_monitor_temperature")?.state).toFixed(1)}°C`
-                      : "—"
-                  }
-                />
-              </div>
-            </div>
-          </div>
+          <EnergyMeterCard
+            title="AC Energy"
+            hint="Climate system"
+            power={acTotalPower}
+            energy={acTotalEnergy}
+            current={acTotalCurrent}
+            voltage={acVoltage}
+            temp={acTemp}
+          />
+
+          {THREE_PHASE_METERS.map((meter) => (
+            <PhaseMeterCard
+              key={meter.prefix}
+              title={meter.title}
+              hint={meter.hint}
+              stats={threePhaseMeterStats(data, meter.prefix)}
+            />
+          ))}
         </div>
       </section>
         </>
@@ -417,6 +556,120 @@ function MiniStat({ icon: Icon, label, value }: { icon: typeof Users; label: str
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
         <div className="text-sm font-semibold truncate">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function PhaseMeterCard({
+  title,
+  hint,
+  stats,
+}: {
+  title: string;
+  hint: string;
+  stats: ReturnType<typeof threePhaseMeterStats>;
+}) {
+  const head = "pb-2 text-[10px] uppercase tracking-wider text-muted-foreground text-right";
+  const label = "py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground";
+  const cell = "py-2.5 text-sm tabular-nums text-right font-semibold";
+  const phase = (values: PhaseValues, digits: number, unit: string) =>
+    PHASE_LEGS.map((leg) => (
+      <div key={leg} className={cell}>
+        {fmtMetric(values[leg], digits, unit)}
+      </div>
+    ));
+
+  return (
+    <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+      <SectionHeader title={title} hint={hint} inline />
+      <div className="grid grid-cols-4 gap-x-2 items-baseline">
+        <div className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Phase</div>
+        <div className={head}>A</div>
+        <div className={head}>B</div>
+        <div className={head}>C</div>
+
+        <div className={label}>Current</div>
+        {phase(stats.current, 2, "A")}
+
+        <div className={label}>Power</div>
+        {phase(stats.power, 2, "W")}
+
+        <div className={label}>Voltage</div>
+        {phase(stats.voltage, 2, "V")}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
+        <div className="flex justify-between items-center gap-3">
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Energy</span>
+          <span className="font-semibold tabular-nums">{fmtMetric(stats.energy, 2, "kWh")}</span>
+        </div>
+        <div className="flex justify-between items-center gap-3">
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Total Energy</span>
+          <span className="font-semibold tabular-nums text-accent">{fmtMetric(stats.totalEnergy, 2, "kWh")}</span>
+        </div>
+        <div className="flex justify-between items-center gap-3">
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Total Power</span>
+          <span className="font-semibold tabular-nums text-primary">{fmtMetric(stats.totalPower, 2, "W")}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EnergyMeterCard({
+  title,
+  hint,
+  power,
+  energy,
+  current,
+  voltage,
+  temp,
+}: {
+  title: string;
+  hint: string;
+  power: number | null;
+  energy: number | null;
+  current: number | null;
+  voltage: number | null;
+  temp?: number | null;
+}) {
+  const showTemp = temp !== undefined;
+  return (
+    <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+      <SectionHeader title={title} hint={hint} inline />
+      <div className="space-y-4">
+        <BigMetric
+          label="Total Power"
+          value={power != null ? power.toFixed(2) : "0"}
+          unit="W"
+          tone="primary"
+        />
+        <BigMetric
+          label="Total Energy"
+          value={energy != null ? energy.toFixed(2) : "0"}
+          unit="kWh"
+          tone="accent"
+        />
+        <div className={`grid ${showTemp ? "grid-cols-3" : "grid-cols-2"} gap-3 pt-2 border-t border-border/50`}>
+          <MiniStat
+            icon={Activity}
+            label="Current"
+            value={current != null ? `${current.toFixed(2)} A` : "—"}
+          />
+          <MiniStat
+            icon={Activity}
+            label="Voltage"
+            value={voltage != null ? `${voltage.toFixed(2)} V` : "—"}
+          />
+          {showTemp && (
+            <MiniStat
+              icon={Thermometer}
+              label="Temp"
+              value={temp != null ? `${temp.toFixed(1)}°C` : "—"}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
