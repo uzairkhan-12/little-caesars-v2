@@ -92,12 +92,17 @@ function haNumericState(data: HAState[], entityId: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function floorZero(n: number | null): number | null {
+  if (n == null) return null;
+  return Math.max(0, n);
+}
+
 function haMetric(data: HAState[], entityId: string): string {
   const n = haNumericState(data, entityId);
   return n == null ? "N/A" : String(n);
 }
 
-function sumAbsChannels(data: HAState[], metric: "current" | "power"): number | null {
+function sumAbsChannels(data: HAState[], metric: "current"): number | null {
   let any = false;
   let sum = 0;
   for (const ch of AC_ENERGY_TOTAL_CHANNELS) {
@@ -105,6 +110,18 @@ function sumAbsChannels(data: HAState[], metric: "current" | "power"): number | 
     if (n == null) continue;
     any = true;
     sum += Math.abs(n);
+  }
+  return any ? sum : null;
+}
+
+function sumFloorZeroChannels(data: HAState[], metric: "power"): number | null {
+  let any = false;
+  let sum = 0;
+  for (const ch of AC_ENERGY_TOTAL_CHANNELS) {
+    const n = haNumericState(data, acChannelEntity(ch, metric));
+    if (n == null) continue;
+    any = true;
+    sum += Math.max(0, n);
   }
   return any ? sum : null;
 }
@@ -160,7 +177,7 @@ function lightDeviceStats(data: HAState[], lightEntityId: string, baselines: Rec
   return {
     current: haNumericState(data, `${prefix}_current`),
     energy: todayConsumption(haNumericState(data, energyId), baselines[energyId]),
-    power: haNumericState(data, `${prefix}_power`),
+    power: floorZero(haNumericState(data, `${prefix}_power`)),
     temperature: haNumericState(data, `${prefix}_temperature`),
     voltage: haNumericState(data, `${prefix}_voltage`),
   };
@@ -185,11 +202,13 @@ function phaseValues(
   prefix: string,
   metric: "current" | "power" | "voltage",
 ): PhaseValues {
-  return {
+  const raw = {
     a: haNumericState(data, `${prefix}_${metric}_a`),
     b: haNumericState(data, `${prefix}_${metric}_b`),
     c: haNumericState(data, `${prefix}_${metric}_c`),
   };
+  if (metric !== "power") return raw;
+  return { a: floorZero(raw.a), b: floorZero(raw.b), c: floorZero(raw.c) };
 }
 
 function threePhaseMeterStats(
@@ -206,7 +225,7 @@ function threePhaseMeterStats(
       haNumericState(data, `${prefix}_total_energy`),
       baselines[`${prefix}_total_energy`],
     ),
-    totalPower: haNumericState(data, `${prefix}_power`),
+    totalPower: floorZero(haNumericState(data, `${prefix}_power`)),
   };
 }
 
@@ -247,7 +266,10 @@ function Home() {
   const lights = data.filter((e) => e.entity_id.startsWith("light."));
   const cameras = data.filter((e) => e.entity_id.startsWith("camera."));
 
-  const lightsTotalPower = sumLightMetrics(data, "power");
+  const lightsTotalPower = collectLightMetrics(data, "power").reduce<number | null>((sum, n) => {
+    const v = Math.max(0, n);
+    return sum == null ? v : sum + v;
+  }, null);
   const lightsTotalEnergy = sumTodayConsumption(
     LIGHT_ENERGY_DEVICES.map((prefix) => {
       const id = lightEntity(prefix, "energy");
@@ -265,12 +287,15 @@ function Home() {
     const used = todayConsumption(haNumericState(data, energyId), baselines[energyId]);
     energyMap[climateId] = {
       current: haMetric(data, acChannelEntity(ch, "current")),
-      power: haMetric(data, acChannelEntity(ch, "power")),
+      power: (() => {
+        const n = floorZero(haNumericState(data, acChannelEntity(ch, "power")));
+        return n == null ? "N/A" : String(n);
+      })(),
       energy: used == null ? "N/A" : String(used),
     };
   }
 
-  const acTotalPower = sumAbsChannels(data, "power");
+  const acTotalPower = sumFloorZeroChannels(data, "power");
   const acTotalCurrent = sumAbsChannels(data, "current");
   const acTotalId = "sensor.ac_energy_monitor_energy1_energy_total";
   const acTotalEnergy =
@@ -667,7 +692,7 @@ function EnergyMeterCard({
       <div className="space-y-4">
         <BigMetric
           label="Total Power"
-          value={power != null ? power.toFixed(2) : "0"}
+          value={power != null ? Math.max(0, power).toFixed(2) : "0"}
           unit="W"
           tone="primary"
         />
@@ -958,7 +983,7 @@ function ClimateCard({
         </div>
         <div className="flex justify-between items-center">
           <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Power</span>
-          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${parseFloat(energy.power).toFixed(2)} W`}</span>
+          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${Math.max(0, parseFloat(energy.power)).toFixed(2)} W`}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Today Energy</span>

@@ -81,10 +81,9 @@ function SchedulesPage() {
                     <div className="font-display text-xl tracking-wider">
                       {(attrs.friendly_name ?? a.entity_id).trim()}
                     </div>
-                    <div className="text-[11px] text-muted-foreground">{a.entity_id}</div>
                   </div>
                 </div>
-                <Toggle on={on} onChange={(next) => toggle.mutate({ entity_id: a.entity_id, on: next })} label={a.entity_id} />
+                <Toggle on={on} onChange={(next) => toggle.mutate({ entity_id: a.entity_id, on: next })} label={attrs.friendly_name ?? "Schedule"} />
 
               </div>
               <div className="mt-4 text-xs text-muted-foreground">
