@@ -13,6 +13,8 @@ import { Route as StatisticsRouteImport } from './routes/statistics'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as EnergyRouteImport } from './routes/energy'
+import { Route as BranchRouteImport } from './routes/branch'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiHaWsRouteImport } from './routes/api/ha.ws'
 import { Route as ApiCameraEntityRouteImport } from './routes/api/camera.$entity'
@@ -37,6 +39,16 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EnergyRoute = EnergyRouteImport.update({
+  id: '/energy',
+  path: '/energy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BranchRoute = BranchRouteImport.update({
+  id: '/branch',
+  path: '/branch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,6 +67,8 @@ const ApiCameraEntityRoute = ApiCameraEntityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/branch': typeof BranchRoute
+  '/energy': typeof EnergyRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
   '/schedules': typeof SchedulesRoute
@@ -64,6 +78,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/branch': typeof BranchRoute
+  '/energy': typeof EnergyRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
   '/schedules': typeof SchedulesRoute
@@ -74,6 +90,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/branch': typeof BranchRoute
+  '/energy': typeof EnergyRoute
   '/login': typeof LoginRoute
   '/reports': typeof ReportsRoute
   '/schedules': typeof SchedulesRoute
@@ -85,6 +103,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/branch'
+    | '/energy'
     | '/login'
     | '/reports'
     | '/schedules'
@@ -94,6 +114,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/branch'
+    | '/energy'
     | '/login'
     | '/reports'
     | '/schedules'
@@ -103,6 +125,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/branch'
+    | '/energy'
     | '/login'
     | '/reports'
     | '/schedules'
@@ -113,6 +137,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BranchRoute: typeof BranchRoute
+  EnergyRoute: typeof EnergyRoute
   LoginRoute: typeof LoginRoute
   ReportsRoute: typeof ReportsRoute
   SchedulesRoute: typeof SchedulesRoute
@@ -151,6 +177,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/energy': {
+      id: '/energy'
+      path: '/energy'
+      fullPath: '/energy'
+      preLoaderRoute: typeof EnergyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/branch': {
+      id: '/branch'
+      path: '/branch'
+      fullPath: '/branch'
+      preLoaderRoute: typeof BranchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -177,6 +217,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BranchRoute: BranchRoute,
+  EnergyRoute: EnergyRoute,
   LoginRoute: LoginRoute,
   ReportsRoute: ReportsRoute,
   SchedulesRoute: SchedulesRoute,

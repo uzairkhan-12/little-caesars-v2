@@ -9,6 +9,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { getGateStatus } from "@/lib/gate.functions";
+import { ThemeProvider } from "@/lib/theme";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
@@ -126,6 +127,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap",
       },
+      {
+        rel: "stylesheet",
+        href: "https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -139,6 +144,11 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" className="dark">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("lc-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}`,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -152,7 +162,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <ThemeProvider>
+        <Outlet />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -1,18 +1,20 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useHAWebSocket } from "@/hooks/useHAWebSocket";
 import { logout, getGateStatus } from "@/lib/gate.functions";
+import { useTheme } from "@/lib/theme";
 import primewaveLogo from "@/assets/primewave-logo.png?url";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
 const allTabs: Array<{ to: string; label: string; exact?: boolean; adminOnly?: boolean; employeeOnly?: boolean }> = [
-  { to: "/", label: "Home", exact: true },
+  { to: "/", label: "Overview", exact: true, adminOnly: true },
+  { to: "/branch", label: "Branch" },
+  { to: "/reports", label: "Reports", adminOnly: true },
   { to: "/statistics", label: "Statistics", adminOnly: true },
   { to: "/schedules", label: "Schedules", adminOnly: true },
-  { to: "/reports", label: "Reports", adminOnly: true },
 ];
 
 export function Header() {
@@ -20,6 +22,7 @@ export function Header() {
   const qc = useQueryClient();
   const logoutFn = useServerFn(logout);
   const statusFn = useServerFn(getGateStatus);
+  const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   
@@ -47,64 +50,69 @@ export function Header() {
     router.navigate({ to: "/login", replace: true });
   };
 
-  // Only show navigation tabs for admins (when tabs array has items)
-  const isAdmin = status?.role === "admin";
+  const showNav = tabs.length > 0;
 
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center gap-3">
         <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain shrink-0" />
 
-        {/* Show navigation only for admins */}
-        {isAdmin && (
-          <>
-            <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1">
-              {tabs.map((t) => (
-                <Link
-                  key={t.to}
-                  to={t.to}
-                  activeOptions={{ exact: t.exact ?? false }}
-                  className="px-4 sm:px-5 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
-                >
-                  {t.label}
-                </Link>
-              ))}
-            </nav>
+        {showNav && (
+          <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1 mx-auto">
+            {tabs.map((t) => (
+              <Link
+                key={t.to}
+                to={t.to}
+                activeOptions={{ exact: t.exact ?? false }}
+                className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap data-[status=active]:bg-gradient-brand data-[status=active]:text-primary-foreground data-[status=active]:shadow-glow"
+              >
+                {t.label}
+              </Link>
+            ))}
+          </nav>
+        )}
 
+        <div className="flex items-center gap-2 ml-auto shrink-0">
+          {showNav && (
             <button
               onClick={() => setOpen((v) => !v)}
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
-              className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition shrink-0"
+              className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition"
             >
               {open ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
-          </>
-        )}
-
-        <button
-          onClick={handleLogout}
-          aria-label="Sign out"
-          title="Sign out"
-          className="hidden sm:inline-flex h-9 px-3 rounded-full bg-card/70 border border-border items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Sign out</span>
-        </button>
-
-        {/* Mobile menu button for employees */}
-        {!isAdmin && (
+          )}
+          <button
+            onClick={toggle}
+            aria-label={theme === "dark" ? "Switch to light" : "Switch to dark"}
+            title={theme === "dark" ? "Light theme" : "Dark theme"}
+            className="h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <button
             onClick={handleLogout}
             aria-label="Sign out"
-            className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition"
+            title="Sign out"
+            className="hidden sm:inline-flex h-9 px-3 rounded-full bg-card/70 border border-border items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
           >
             <LogOut className="w-4 h-4" />
+            <span>Sign out</span>
           </button>
-        )}
+          {!showNav && (
+            <button
+              onClick={handleLogout}
+              aria-label="Sign out"
+              className="sm:hidden h-9 w-9 rounded-full bg-card/70 border border-border grid place-items-center text-foreground hover:border-primary/50 transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {open && isAdmin && (
+      {open && showNav && (
         <div className="sm:hidden border-t border-border bg-background/95 backdrop-blur-md">
           <nav className="px-3 py-3 flex flex-col gap-1">
             {tabs.map((t) => (
@@ -143,7 +151,7 @@ export function Shell({
 }) {
   useHAWebSocket();
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-transparent">
       <Header />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-10 py-8">
         {title && (

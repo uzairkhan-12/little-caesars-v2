@@ -214,3 +214,207 @@ export const getSummary = createServerFn({ method: "GET" }).handler(async () => 
 
   return { counts, today, events, hourly: hourly.hours };
 });
+
+function riyadhTodayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function shiftMonthKey(ym: string, delta: number) {
+  const y = Number(ym.slice(0, 4));
+  const m = Number(ym.slice(5, 7));
+  const dt = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function daysInMonthKey(ym: string) {
+  const y = Number(ym.slice(0, 4));
+  const m = Number(ym.slice(5, 7));
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function clampDayKey(ym: string, day: number) {
+  return `${ym}-${String(Math.min(Math.max(day, 1), daysInMonthKey(ym))).padStart(2, "0")}`;
+}
+
+function pctChange(current: number, previous: number | null) {
+  if (previous == null) return null;
+  if (previous === 0) return current === 0 ? 0 : 100;
+  return ((current - previous) / previous) * 100;
+}
+
+function sumVisits(days: DayBucket[], from: string, to: string) {
+  return days.filter((d) => d.date >= from && d.date <= to).reduce((s, d) => s + d.entries, 0);
+}
+
+const DAYPARTS: Array<{ name: string; hours: number[] }> = [
+  { name: "Breakfast", hours: [6, 7, 8, 9] },
+  { name: "Lunch", hours: [10, 11, 12, 13] },
+  { name: "Afternoon", hours: [14, 15, 16] },
+  { name: "Dinner", hours: [17, 18, 19, 20] },
+  { name: "Late night", hours: [21, 22, 23, 0, 1, 2, 3, 4, 5] },
+];
+
+const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export type VisitorOverview = {
+  todayVisits: number;
+  todayPeakHour: number | null;
+  tables: number;
+  occupiedTables: number;
+  occupancy: number;
+  tableUsePct: number | null;
+  tableZones: Array<{ name: string; count: number }>;
+  mtd: number;
+  prevMtd: number | null;
+  yearMtd: number | null;
+  mtdChangePct: number | null;
+  yearChangePct: number | null;
+  quarter: number;
+  yearToDate: number;
+  throughDay: number;
+  cumulative: Array<{ day: number; current: number; previous: number; year: number }>;
+  dayparts: Array<{ name: string; current: number }>;
+  heatmap: Array<{ dow: number; name: string; hours: number[] }>;
+  busiest: string | null;
+  quietest: string | null;
+};
+
+export const getVisitorOverview = createServerFn({ method: "GET" }).handler(async () => {
+  await (await import("./gate.server")).assertUnlocked();
+  const todayKey = riyadhTodayKey();
+  const thisMonth = todayKey.slice(0, 7);
+  const throughDay = Number(todayKey.slice(8, 10));
+  const prevMonth = shiftMonthKey(thisMonth, -1);
+  const lastYear = `${Number(thisMonth.slice(0, 4)) - 1}-${thisMonth.slice(5, 7)}`;
+  const mtdTo = todayKey;
+  const prevTo = clampDayKey(prevMonth, throughDay);
+  const yearTo = clampDayKey(lastYear, throughDay);
+
+  const emptyHourly: HourlyResponse = {
+    date: todayKey,
+    hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
+  };
+  const emptyDow = (dow: number): HourlyDowResponse => ({
+    dow,
+    dow_name: DOW_NAMES[dow] ?? "",
+    days_range: 28,
+    occurrences: 0,
+    since: "",
+    hours: Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      entries_avg: 0,
+      exits_avg: 0,
+      events_avg: 0,
+      entries_total: 0,
+      exits_total: 0,
+      events_total: 0,
+    })),
+  });
+
+  const [dailyRaw, todayRaw, hourlyRaw, counts, ...dowRaws] = await Promise.all([
+    safeJson<DailyResponse>("/api/daily?days=400", { since: "", days: [] }),
+    safeJson<TodayResponse>(`/api/today`, {
+      date: todayKey,
+      entries: 0,
+      exits: 0,
+      events: 0,
+    }),
+    safeJson<HourlyResponse>("/api/hourly", emptyHourly),
+    safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
+    ...[0, 1, 2, 3, 4, 5, 6].map((dow) =>
+      safeJson<HourlyDowResponse>(`/api/hourly-by-dow?dow=${dow}&days=28`, emptyDow(dow)),
+    ),
+  ]);
+
+  const daily = transformDaily(dailyRaw).days;
+  const today = transformToday(todayRaw);
+  const hourly = transformHourly(hourlyRaw).hours;
+  const todayRow = daily.find((d) => d.date === todayKey);
+  if (todayRow) todayRow.entries = today.entries;
+  else daily.push({ date: todayKey, entries: today.entries, exits: today.exits, visits: today.visits });
+  const mtd = sumVisits(daily, `${thisMonth}-01`, mtdTo);
+  const prevHas = daily.some((d) => d.date >= `${prevMonth}-01` && d.date <= prevTo);
+  const yearHas = daily.some((d) => d.date >= `${lastYear}-01` && d.date <= yearTo);
+  const prevMtd = prevHas ? sumVisits(daily, `${prevMonth}-01`, prevTo) : null;
+  const yearMtd = yearHas ? sumVisits(daily, `${lastYear}-01`, yearTo) : null;
+  const qStartMonth = Math.floor((Number(thisMonth.slice(5, 7)) - 1) / 3) * 3 + 1;
+  const quarterFrom = `${thisMonth.slice(0, 4)}-${String(qStartMonth).padStart(2, "0")}-01`;
+  const quarter = sumVisits(daily, quarterFrom, todayKey);
+  const yearToDate = sumVisits(daily, `${thisMonth.slice(0, 4)}-01-01`, todayKey);
+
+  const cumulative = Array.from({ length: throughDay }, (_, i) => {
+    const d = i + 1;
+    return {
+      day: d,
+      current: sumVisits(daily, `${thisMonth}-01`, clampDayKey(thisMonth, d)),
+      previous: sumVisits(daily, `${prevMonth}-01`, clampDayKey(prevMonth, d)),
+      year: sumVisits(daily, `${lastYear}-01`, clampDayKey(lastYear, d)),
+    };
+  });
+
+  const avgHour = Array.from({ length: 24 }, () => 0);
+  for (const raw of dowRaws) {
+    for (const h of raw.hours) {
+      avgHour[toLocalHour(h.hour)] += h.entries_avg / 7;
+    }
+  }
+  const dayparts = DAYPARTS.map((p) => ({
+    name: p.name,
+    current: p.hours.reduce((s, h) => s + avgHour[h] * throughDay, 0),
+  }));
+
+  const heatmap = dowRaws.map((raw, dow) => {
+    const hours = Array.from({ length: 24 }, () => 0);
+    for (const h of raw.hours) hours[toLocalHour(h.hour)] = h.entries_avg;
+    return { dow, name: raw.dow_name || DOW_NAMES[dow], hours };
+  });
+
+  let busiest: { label: string; n: number } | null = null;
+  let quietest: { label: string; n: number } | null = null;
+  for (const row of heatmap) {
+    for (let h = 10; h <= 23; h++) {
+      const n = row.hours[h] ?? 0;
+      const label = `${row.name} ${((h + 11) % 12) + 1}${h >= 12 ? " PM" : " AM"}`;
+      if (!busiest || n > busiest.n) busiest = { label, n };
+      if (n > 0 && (!quietest || n < quietest.n)) quietest = { label, n };
+    }
+  }
+
+  const tableZones = counts.zones
+    .filter((z) => !z.includes("entrance"))
+    .map((z) => ({ name: z, count: counts.counts[z] ?? 0 }));
+  const occupiedTables = tableZones.filter((z) => z.count > 0).length;
+  const peakHour = hourly.reduce<{ hour: number; visits: number } | null>((best, h) => {
+    if (!best || h.entries > best.visits) return { hour: h.hour, visits: h.entries };
+    return best;
+  }, null);
+
+  const out: VisitorOverview = {
+    todayVisits: today.entries,
+    todayPeakHour: peakHour && peakHour.visits > 0 ? peakHour.hour : null,
+    tables: tableZones.length,
+    occupiedTables,
+    occupancy: counts.total,
+    tableUsePct: tableZones.length ? (occupiedTables / tableZones.length) * 100 : null,
+    tableZones,
+    mtd,
+    prevMtd,
+    yearMtd,
+    mtdChangePct: pctChange(mtd, prevMtd),
+    yearChangePct: pctChange(mtd, yearMtd),
+    quarter,
+    yearToDate,
+    throughDay,
+    cumulative,
+    dayparts,
+    heatmap,
+    busiest: busiest?.label ?? null,
+    quietest: quietest?.label ?? null,
+  };
+  return out;
+});

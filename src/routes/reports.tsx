@@ -2,14 +2,18 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, CalendarIcon, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { PeriodFilter, periodLabel, type PeriodValue } from "@/components/PeriodFilter";
 import { getGateStatus } from "@/lib/gate.functions";
-import { getEnergyReports } from "@/lib/energy-reports.functions";
+import { getEnergyBaselines, getEnergyReports } from "@/lib/energy-reports.functions";
+import { getStates, type HAState } from "@/lib/ha.functions";
 import {
   REPORT_DEVICES,
   REPORT_TABLE_LABELS,
   REPORT_TABLES,
+  riyadhEnergyDayKey,
+  todayConsumption,
   type EnergyReportRow,
   type ReportTable,
 } from "@/lib/energy-devices";
@@ -24,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -39,7 +42,7 @@ export const Route = createFileRoute("/reports")({
     try {
       const status = await getGateStatus();
       if (!status.unlocked || status.role !== "admin") {
-        throw redirect({ to: "/" });
+        throw redirect({ to: "/branch" });
       }
     } catch {
       throw redirect({ to: "/login" });
@@ -50,22 +53,13 @@ export const Route = createFileRoute("/reports")({
 
 const PAGE_SIZE = 10;
 
-function pad(n: number) {
-  return String(n).padStart(2, "0");
-}
+type ReportRow = EnergyReportRow & { live?: boolean };
 
-function toDateInput(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function todayDate() {
-  return toDateInput(new Date());
-}
-
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return toDateInput(d);
+function haEnergy(states: HAState[], entityId: string): number | null {
+  const raw = states.find((s) => s.entity_id === entityId)?.state;
+  if (raw == null || raw === "" || raw === "unknown" || raw === "unavailable") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 function formatDay(iso: string) {
@@ -89,44 +83,90 @@ function filteredTotalEnergy(rows: EnergyReportRow[]) {
 function ReportsPage() {
   const [table, setTable] = useState<ReportTable>("lights");
   const [deviceId, setDeviceId] = useState("all");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [period, setPeriod] = useState<PeriodValue>({ start: "", end: "" });
   const [page, setPage] = useState(1);
 
   const reportsFn = useServerFn(getEnergyReports);
+  const statesFn = useServerFn(getStates);
+  const baselinesFn = useServerFn(getEnergyBaselines);
 
   const reports = useQuery({
     queryKey: ["energy-reports", table],
     queryFn: () => reportsFn({ data: { table } }),
   });
+  const states = useQuery({
+    queryKey: ["ha", "states"],
+    queryFn: () => statesFn(),
+    refetchInterval: 15_000,
+  });
+  const baselines = useQuery({
+    queryKey: ["energy-baselines"],
+    queryFn: () => baselinesFn(),
+    refetchInterval: 60_000,
+  });
 
   const devices = REPORT_DEVICES[table];
+  const todayKey = riyadhEnergyDayKey();
   const rows = reports.data ?? [];
+  const months = useMemo(() => [...new Set(rows.map((r) => r.dayKey.slice(0, 7)))].sort(), [rows]);
+
+  const liveRows = useMemo((): ReportRow[] => {
+    if (!states.data) return [];
+    const base = baselines.data ?? {};
+    const now = new Date().toISOString();
+    return devices
+      .filter((d) => deviceId === "all" || d.entityId === deviceId)
+      .map((d) => {
+        const current = haEnergy(states.data ?? [], d.entityId);
+        const consumption = todayConsumption(current, base[d.entityId]);
+        return {
+          table,
+          deviceName: d.name,
+          entityId: d.entityId,
+          energy: current,
+          consumption,
+          day: now,
+          dayKey: todayKey,
+          live: true,
+        };
+      })
+      .filter((r) => r.consumption != null);
+  }, [states.data, baselines.data, devices, deviceId, table, todayKey]);
+
+  const includeLive = (!period.start || period.start <= todayKey) && (!period.end || period.end >= todayKey);
+
+  const byDevice = useMemo(() => {
+    return rows.filter((r) => deviceId === "all" || r.entityId === deviceId);
+  }, [rows, deviceId]);
 
   const filtered = useMemo(() => {
-    return rows
+    const closed = byDevice
       .filter((r) => {
-        if (deviceId !== "all" && r.entityId !== deviceId) return false;
-        if (start && r.dayKey < start) return false;
-        if (end && r.dayKey > end) return false;
+        if (period.start && r.dayKey < period.start) return false;
+        if (period.end && r.dayKey > period.end) return false;
         return true;
       })
       .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.deviceName.localeCompare(b.deviceName)));
-  }, [rows, deviceId, start, end]);
+    return includeLive ? [...liveRows, ...closed] : closed;
+  }, [byDevice, period.start, period.end, includeLive, liveRows]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const from = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const to = Math.min(safePage * PAGE_SIZE, filtered.length);
-  const totalEnergy = useMemo(() => filteredTotalEnergy(filtered), [filtered]);
+  const totalEnergy = useMemo(
+    () => filteredTotalEnergy(byDevice) + (includeLive ? filteredTotalEnergy(liveRows) : 0),
+    [byDevice, includeLive, liveRows],
+  );
+  const periodEnergy = useMemo(() => filteredTotalEnergy(filtered), [filtered]);
+  const hasPeriod = Boolean(period.start || period.end);
   const selectedDevice = devices.find((d) => d.entityId === deviceId)?.name;
-  const rangeHint =
-    start && end ? (start === end ? formatDay(`${start}T00:00:00+03:00`) : `${formatDay(`${start}T00:00:00+03:00`)} – ${formatDay(`${end}T00:00:00+03:00`)}`) : "All days";
+  const rangeHint = periodLabel(period);
 
   useEffect(() => {
     setPage(1);
-  }, [table, deviceId, start, end]);
+  }, [table, deviceId, period.start, period.end]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -140,13 +180,12 @@ function ReportsPage() {
 
   const clearFilters = () => {
     setDeviceId("all");
-    setStart("");
-    setEnd("");
+    setPeriod({ start: "", end: "" });
     setPage(1);
   };
 
   return (
-    <Shell title="Reports" subtitle="Each row is one 6:00 AM–6:00 AM Asia/Riyadh day. Filter by device and date range.">
+    <Shell title="Reports" subtitle="Closed 6:00 AM days plus today’s live consumption from each device, the same numbers as Branch.">
       <Tabs value={table} onValueChange={(v) => changeTable(v as ReportTable)}>
         <TabsList className="h-auto flex-wrap bg-card/70 border border-border p-1">
           {REPORT_TABLES.map((id) => (
@@ -158,10 +197,10 @@ function ReportsPage() {
       </Tabs>
 
       <div className="mt-6 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-start gap-5">
           <Field label="Device">
             <Select value={deviceId} onValueChange={setDeviceId}>
-              <SelectTrigger className="bg-input border-border text-foreground [&_svg]:text-foreground [&_svg]:opacity-100">
+              <SelectTrigger className="bg-input border-border text-foreground w-full sm:w-64 [&_svg]:text-foreground [&_svg]:opacity-100">
                 <SelectValue placeholder="All devices" />
               </SelectTrigger>
               <SelectContent>
@@ -174,37 +213,19 @@ function ReportsPage() {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Start">
-            <DateField value={start} onChange={setStart} />
-          </Field>
-          <Field label="End">
-            <DateField value={end} onChange={setEnd} />
-          </Field>
-          <div className="flex flex-col justify-end gap-2">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => { setStart(todayDate()); setEnd(todayDate()); }}>
-                Today
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setStart(daysAgo(6));
-                  setEnd(todayDate());
-                }}
-              >
-                Last 7 days
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
-                Clear
-              </Button>
-            </div>
+          <div className="flex-1 space-y-1.5 min-w-0">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Period</Label>
+            <PeriodFilter value={period} onChange={setPeriod} months={months} />
+          </div>
+          <div className="flex xl:flex-col justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+              Reset
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft p-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft p-5 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-accent" />
@@ -213,11 +234,24 @@ function ReportsPage() {
           <p className="text-xs text-muted-foreground mt-2">
             {REPORT_TABLE_LABELS[table]}
             {deviceId !== "all" && selectedDevice ? ` · ${selectedDevice}` : " · All devices"}
-            {` · ${rangeHint}`}
+            {" · All time"}
           </p>
         </div>
-        <div className="font-display text-4xl tabular-nums text-accent">
-          {reports.isLoading ? "…" : formatKwh(totalEnergy)}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8">
+          {hasPeriod && (
+            <div className="sm:text-right">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">In this period</p>
+              <p className="text-xs text-muted-foreground mt-1">{rangeHint}</p>
+              <p className="font-display text-2xl tabular-nums text-foreground mt-1">
+                {reports.isLoading ? "…" : formatKwh(periodEnergy)}
+              </p>
+            </div>
+          )}
+          <div className="sm:text-right">
+            <div className="font-display text-4xl tabular-nums text-accent">
+              {reports.isLoading ? "…" : formatKwh(totalEnergy)}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -228,6 +262,7 @@ function ReportsPage() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {filtered.length} reading{filtered.length === 1 ? "" : "s"}
               {deviceId !== "all" ? ` · ${devices.find((d) => d.entityId === deviceId)?.name}` : ""}
+              {hasPeriod ? ` · ${rangeHint}` : ""}
             </p>
           </div>
         </div>
@@ -247,22 +282,31 @@ function ReportsPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!reports.isLoading && pageRows.length === 0 && (
+            {reports.isError && (
               <TableRow>
                 <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
-                  {rows.length === 0
-                    ? "No closed days yet. The 6:00 AM job writes the previous day's consumption here."
+                  Could not load reports. Refresh the page.
+                </TableCell>
+              </TableRow>
+            )}
+            {!reports.isLoading && !reports.isError && pageRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+                  {rows.length === 0 && liveRows.length === 0
+                    ? "No closed days yet. Today’s live consumption appears here once Home Assistant is reachable."
                     : "No readings match these filters. Clear or widen the date range."}
                 </TableCell>
               </TableRow>
             )}
-            {pageRows.map((row: EnergyReportRow) => (
-              <TableRow key={`${row.dayKey}-${row.entityId}`}>
+            {pageRows.map((row: ReportRow) => (
+              <TableRow key={`${row.live ? "live" : row.dayKey}-${row.entityId}`}>
                 <TableCell className="px-5 font-medium">{row.deviceName}</TableCell>
                 <TableCell className="px-5 tabular-nums font-semibold">
                   {row.consumption == null ? "—" : `${row.consumption.toFixed(2)} kWh`}
                 </TableCell>
-                <TableCell className="px-5 text-muted-foreground tabular-nums">{formatDay(row.day)}</TableCell>
+                <TableCell className="px-5 text-muted-foreground tabular-nums">
+                  {row.live ? `${formatDay(row.day)} · so far` : formatDay(row.day)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -270,7 +314,7 @@ function ReportsPage() {
             <TableFooter>
               <TableRow className="hover:bg-transparent">
                 <TableCell className="px-5">Total consumption</TableCell>
-                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(totalEnergy)}</TableCell>
+                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(hasPeriod ? periodEnergy : totalEnergy)}</TableCell>
                 <TableCell className="px-5 text-muted-foreground">{rangeHint}</TableCell>
               </TableRow>
             </TableFooter>
@@ -311,20 +355,6 @@ function ReportsPage() {
         </div>
       </div>
     </Shell>
-  );
-}
-
-function DateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="relative">
-      <Input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-input border-border text-foreground pr-9 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-y-0 [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-9 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-      />
-      <CalendarIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground" />
-    </div>
   );
 }
 

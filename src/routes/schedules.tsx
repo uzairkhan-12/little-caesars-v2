@@ -12,7 +12,7 @@ export const Route = createFileRoute("/schedules")({
     try {
       const status = await getGateStatus();
       if (!status.unlocked || status.role !== "admin") {
-        throw redirect({ to: "/" });
+        throw redirect({ to: "/branch" });
       }
     } catch (err) {
       throw redirect({ to: "/login" });

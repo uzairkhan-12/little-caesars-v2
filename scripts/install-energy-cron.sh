@@ -7,9 +7,6 @@ MARKER="scripts/energy-snapshot.mjs"
 JOB="0 6 * * * cd \"$ROOT\" && \"$NODE\" \"$ROOT/scripts/energy-snapshot.mjs\" >> \"$ROOT/data/energy-snapshot.log\" 2>&1"
 
 mkdir -p "$ROOT/data"
-if [ ! -f "$ROOT/data/energy-reports.json" ]; then
-  printf '{ "rows": [] }\n' > "$ROOT/data/energy-reports.json"
-fi
 touch "$ROOT/data/energy-snapshot.log"
 
 EXISTING="$(crontab -l 2>/dev/null || true)"

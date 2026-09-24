@@ -19,3 +19,9 @@ export const getEnergyBaselines = createServerFn({ method: "GET" }).handler(asyn
   const { getEnergyBaselines: load } = await import("./energy-reports.server");
   return load();
 });
+
+export const getEnergyOverview = createServerFn({ method: "GET" }).handler(async () => {
+  await (await import("./gate.server")).assertUnlocked();
+  const { getEnergyOverview: load } = await import("./energy-reports.server");
+  return load();
+});

@@ -9,6 +9,9 @@ export const REPORT_TABLE_LABELS: Record<ReportTable, string> = {
   chiller: "Chiller",
 };
 
+/** SEC mockup tariff used for Energy cost (SAR / kWh). */
+export const ENERGY_SAR_PER_KWH = 0.2;
+
 /** Devices snapshotted at 6:00 AM Asia/Riyadh. Energy entity per device. */
 export const REPORT_DEVICES: Record<ReportTable, { name: string; entityId: string }[]> = {
   lights: [
@@ -67,6 +70,31 @@ export function isReportDevice(entityId: string) {
   return REPORT_ENTITY_IDS.has(entityId);
 }
 
+const ENERGY_RESET_HOUR = 6;
+
+/** Energy day in Asia/Riyadh: before 6:00 AM still belongs to yesterday. */
+export function riyadhEnergyDayKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const hour = get("hour");
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (hour < ENERGY_RESET_HOUR) dt.setUTCDate(dt.getUTCDate() - 1);
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(dt.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Live kWh since the 6:00 AM snapshot. Missing baseline counts as "just reset" (0). */
 export function todayConsumption(current: number | null | undefined, baseline: number | null | undefined): number | null {
   if (current == null) return null;
@@ -78,6 +106,15 @@ export function sumTodayConsumption(values: Array<number | null>): number | null
   const nums = values.filter((n): n is number => n != null);
   if (!nums.length) return null;
   return nums.reduce((a, b) => a + b, 0);
+}
+
+export function addCalendarKey(dayKey: string, delta: number) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + delta));
+  const year = dt.getUTCFullYear();
+  const month = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(dt.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function sortReadings(rows: EnergyReportRow[]) {
@@ -123,8 +160,18 @@ export function withDailyConsumption(rows: EnergyReportRow[]): EnergyReportRow[]
       const row = list[i];
       const next = list[i + 1];
       const start = row.energy;
-      const end = next ? next.energy : endByKey.get(`${row.entityId}|${row.dayKey}`)?.energy;
-      const consumption = start != null && end != null ? Math.max(0, end - start) : null;
+      const consecutive =
+        next != null &&
+        next.dayKey === addCalendarKey(row.dayKey, 1) &&
+        start != null &&
+        next.energy != null &&
+        next.energy >= start;
+      const end = consecutive
+        ? next.energy
+        : next
+          ? null
+          : endByKey.get(`${row.entityId}|${row.dayKey}`)?.energy;
+      const consumption = start != null && end != null ? Math.max(0, +(end - start).toFixed(6)) : null;
       out.push({ ...row, consumption });
     }
   }

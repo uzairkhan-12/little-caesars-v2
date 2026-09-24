@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "energy-snapshot": "node scripts/energy-snapshot.mjs",
-    "energy-cron:install": "bash scripts/install-energy-cron.sh"
+    "energy-cron:install": "bash scripts/install-energy-cron.sh",
+    "energy-bill": "node scripts/import-bill-month.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

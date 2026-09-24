@@ -6,9 +6,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasDay, insertRows, openEnergyDb } from "./lib/energy-sqlite.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DB_PATH = path.join(ROOT, "data", "energy-reports.json");
 const TZ = "Asia/Riyadh";
 const RESET_HOUR = 6;
 
@@ -87,21 +87,10 @@ async function main() {
   const token = process.env.HOME_ASSISTANT_TOKEN;
   if (!url || !token) throw new Error("HOME_ASSISTANT_URL / HOME_ASSISTANT_TOKEN missing");
 
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ rows: [] }, null, 2));
-  }
-  let db = { rows: [] };
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-    db = { rows: Array.isArray(parsed.rows) ? parsed.rows : [] };
-  } catch {
-    db = { rows: [] };
-  }
-
+  const db = openEnergyDb();
   const now = new Date();
   const dayKey = riyadhDayKey(now);
-  if (db.rows.some((r) => r.dayKey === dayKey)) {
+  if (hasDay(db, dayKey)) {
     console.log(`[energy-snapshot] already stored for ${dayKey}, skipping`);
     return;
   }
@@ -127,10 +116,7 @@ async function main() {
     dayKey,
   }));
 
-  const next = { rows: [...db.rows, ...inserted] };
-  const tmp = `${DB_PATH}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2));
-  fs.renameSync(tmp, DB_PATH);
+  insertRows(db, inserted);
   console.log(`[energy-snapshot] stored ${inserted.length} rows for energy-day ${dayKey} (6:00 AM)`);
 }
 

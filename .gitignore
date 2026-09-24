@@ -20,9 +20,13 @@ dist-ssr
 .wrangler/
 .dev.vars
 
-# Energy snapshot logs / temp files. Keep data/energy-reports.json in git (empty starter).
+# Energy store. SQLite is the live database; ignore WAL sidecars and JSON leftovers.
 data/*.json.tmp
 data/*.log
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/energy-reports.json
+data/energy-reports.json.migrated
 
 # Editor directories and files
 .vscode/*
