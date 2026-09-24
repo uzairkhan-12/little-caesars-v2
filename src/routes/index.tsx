@@ -180,15 +180,19 @@ function OverviewPage() {
         </div>
       )}
 
-      {(energy.isLoading || visitors.isLoading) && (
+      {(energy.isLoading || visitors.isLoading) && !e && (
         <p className="text-sm text-muted-foreground mt-6">Loading overview…</p>
       )}
 
-      {e && v && (
+      {e && (
         <>
           <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-10 items-start">
-            <EnergyAngleSection energy={e as EnergyData} visitors={v as VisitorData} range={range} />
-            <BusinessAngle visitors={v as VisitorData} energy={e as EnergyData} range={range} />
+            <EnergyAngleSection energy={e as EnergyData} visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS} range={range} />
+            {v ? (
+              <BusinessAngle visitors={v as VisitorData} energy={e as EnergyData} range={range} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading business insights…</p>
+            )}
           </div>
           <EnergyDetailSection energy={e as EnergyData} />
         </>
@@ -247,6 +251,29 @@ type VisitorData = {
   heatmap: Array<{ dow: number; name: string; hours: number[] }>;
   busiest: string | null;
   quietest: string | null;
+};
+
+const EMPTY_VISITORS: VisitorData = {
+  todayVisits: 0,
+  todayPeakHour: null,
+  tables: 0,
+  occupiedTables: 0,
+  occupancy: 0,
+  tableUsePct: null,
+  tableZones: [],
+  mtd: 0,
+  prevMtd: null,
+  yearMtd: null,
+  mtdChangePct: null,
+  yearChangePct: null,
+  quarter: 0,
+  yearToDate: 0,
+  throughDay: 0,
+  cumulative: [],
+  dayparts: [],
+  heatmap: [],
+  busiest: null,
+  quietest: null,
 };
 
 function energySlice(energy: EnergyData, range: Range) {

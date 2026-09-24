@@ -20,6 +20,17 @@ export default defineConfig({
       // protection) needs it allow-listed explicitly or every request 404s
       // with "Blocked request. This host is not allowed."
       allowedHosts: ["little-caesars.primewave2.tech"],
+      // When opened through the HTTPS tunnel, the Vite client must use wss:443.
+      // Leave unset locally so localhost HMR keeps working.
+      ...(process.env.VITE_TUNNEL_HMR === "1"
+        ? {
+            hmr: {
+              protocol: "wss" as const,
+              host: "little-caesars.primewave2.tech",
+              clientPort: 443,
+            },
+          }
+        : {}),
     },
   },
 });

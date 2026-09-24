@@ -140,6 +140,19 @@ export function Header() {
   );
 }
 
+function SupportEmail() {
+  const [addr, setAddr] = useState("");
+  useEffect(() => {
+    setAddr("info@primewave.ai");
+  }, []);
+  if (!addr) return null;
+  return (
+    <a href={`mailto:${addr}`} className="text-accent hover:text-accent/80 transition-colors">
+      {addr}
+    </a>
+  );
+}
+
 export function Shell({
   children,
   title,
@@ -180,13 +193,7 @@ export function Shell({
             </div>
           </div>
           <div className="text-xs text-muted-foreground">
-            Support &amp; info:{" "}
-            <a
-              href="mailto:info@primewave.ai"
-              className="text-accent hover:text-accent/80 transition-colors"
-            >
-              info@primewave.ai
-            </a>
+            Support &amp; info: <SupportEmail />
           </div>
         </div>
       </footer>

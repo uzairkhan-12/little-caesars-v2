@@ -317,7 +317,7 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
   });
 
   const [dailyRaw, todayRaw, hourlyRaw, counts, ...dowRaws] = await Promise.all([
-    safeJson<DailyResponse>("/api/daily?days=400", { since: "", days: [] }),
+    safeJson<DailyResponse>("/api/daily?days=365", { since: "", days: [] }),
     safeJson<TodayResponse>(`/api/today`, {
       date: todayKey,
       entries: 0,

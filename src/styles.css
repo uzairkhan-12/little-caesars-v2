@@ -130,9 +130,8 @@
   body {
     background-color: var(--color-background);
     background-image: var(--gradient-page);
-    background-attachment: fixed;
     color: var(--color-foreground);
-    font-family: "Clash Display", "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   h1,
