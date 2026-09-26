@@ -12,6 +12,7 @@ import {
   REPORT_DEVICES,
   REPORT_TABLE_LABELS,
   REPORT_TABLES,
+  isMeterStale,
   riyadhEnergyDayKey,
   todayConsumption,
   type EnergyReportRow,
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/reports")({
 
 const PAGE_SIZE = 10;
 
-type ReportRow = EnergyReportRow & { live?: boolean };
+type ReportRow = EnergyReportRow & { live?: boolean; stale?: boolean };
 
 function haEnergy(states: HAState[], entityId: string): number | null {
   const raw = states.find((s) => s.entity_id === entityId)?.state;
@@ -72,6 +73,9 @@ function formatDay(iso: string) {
 }
 
 function formatKwh(n: number) {
+  if (Math.abs(n) >= 1000) {
+    return `${(n / 1000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MWh`;
+  }
   return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`;
 }
 
@@ -117,17 +121,20 @@ function ReportsPage() {
     return devices
       .filter((d) => deviceId === "all" || d.entityId === deviceId)
       .map((d) => {
+        const ha = states.data?.find((s) => s.entity_id === d.entityId);
         const current = haEnergy(states.data ?? [], d.entityId);
         const consumption = todayConsumption(current, base[d.entityId]);
+        const stale = isMeterStale(ha?.last_updated);
         return {
           table,
           deviceName: d.name,
           entityId: d.entityId,
           energy: current,
           consumption,
-          day: now,
+          day: stale && ha?.last_updated ? ha.last_updated : now,
           dayKey: todayKey,
           live: true,
+          stale,
         };
       })
       .filter((r) => r.consumption != null);
@@ -160,9 +167,10 @@ function ReportsPage() {
     [byDevice, includeLive, liveRows],
   );
   const periodEnergy = useMemo(() => filteredTotalEnergy(filtered), [filtered]);
-  const hasPeriod = Boolean(period.start || period.end);
   const selectedDevice = devices.find((d) => d.entityId === deviceId)?.name;
   const rangeHint = periodLabel(period);
+  const hasPeriod = Boolean(period.start || period.end);
+  const scopeHint = `${REPORT_TABLE_LABELS[table]}${deviceId !== "all" && selectedDevice ? ` · ${selectedDevice}` : " · All devices"}`;
 
   useEffect(() => {
     setPage(1);
@@ -225,32 +233,28 @@ function ReportsPage() {
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft p-5 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-accent" />
-            <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Total Consumption</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {REPORT_TABLE_LABELS[table]}
-            {deviceId !== "all" && selectedDevice ? ` · ${selectedDevice}` : " · All devices"}
-            {" · All time"}
-          </p>
+      <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-4 h-4 text-accent" />
+          <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Total Consumption</span>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8">
+        <p className="text-xs text-muted-foreground mb-4">{scopeHint}</p>
+        <div className={`grid gap-4 ${hasPeriod ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
           {hasPeriod && (
-            <div className="sm:text-right">
+            <div className="rounded-xl border border-border/60 bg-background/30 px-4 py-3">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">In this period</p>
               <p className="text-xs text-muted-foreground mt-1">{rangeHint}</p>
-              <p className="font-display text-2xl tabular-nums text-foreground mt-1">
+              <p className="font-display text-3xl tabular-nums text-foreground mt-2">
                 {reports.isLoading ? "…" : formatKwh(periodEnergy)}
               </p>
             </div>
           )}
-          <div className="sm:text-right">
-            <div className="font-display text-4xl tabular-nums text-accent">
+          <div className="rounded-xl border border-border/60 bg-background/30 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">All time</p>
+            <p className="text-xs text-muted-foreground mt-1">{REPORT_TABLE_LABELS[table]} · every stored day</p>
+            <p className="font-display text-3xl tabular-nums text-accent mt-2">
               {reports.isLoading ? "…" : formatKwh(totalEnergy)}
-            </div>
+            </p>
           </div>
         </div>
       </div>
@@ -264,6 +268,11 @@ function ReportsPage() {
               {deviceId !== "all" ? ` · ${devices.find((d) => d.entityId === deviceId)?.name}` : ""}
               {hasPeriod ? ` · ${rangeHint}` : ""}
             </p>
+            {liveRows.some((r) => r.stale) && includeLive && (
+              <p className="text-xs text-amber-400 mt-1">
+                These kWh meters have not reported since before 6:00 AM, so today so far stays 0.00 until Home Assistant gets a new total. AC meters usually update continuously.
+              </p>
+            )}
           </div>
         </div>
         <Table>
@@ -305,7 +314,11 @@ function ReportsPage() {
                   {row.consumption == null ? "—" : `${row.consumption.toFixed(2)} kWh`}
                 </TableCell>
                 <TableCell className="px-5 text-muted-foreground tabular-nums">
-                  {row.live ? `${formatDay(row.day)} · so far` : formatDay(row.day)}
+                  {row.live
+                    ? row.stale
+                      ? `${formatDay(row.day)} · meter last updated`
+                      : `${formatDay(row.day)} · so far`
+                    : formatDay(row.day)}
                 </TableCell>
               </TableRow>
             ))}
@@ -314,7 +327,7 @@ function ReportsPage() {
             <TableFooter>
               <TableRow className="hover:bg-transparent">
                 <TableCell className="px-5">Total consumption</TableCell>
-                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(hasPeriod ? periodEnergy : totalEnergy)}</TableCell>
+                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(periodEnergy)}</TableCell>
                 <TableCell className="px-5 text-muted-foreground">{rangeHint}</TableCell>
               </TableRow>
             </TableFooter>

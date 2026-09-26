@@ -71,6 +71,8 @@ export function isReportDevice(entityId: string) {
 }
 
 const ENERGY_RESET_HOUR = 6;
+/** Riyadh is UTC+3 year-round (no DST). */
+const RIYADH_OFFSET_HOURS = 3;
 
 /** Energy day in Asia/Riyadh: before 6:00 AM still belongs to yesterday. */
 export function riyadhEnergyDayKey(date = new Date()) {
@@ -93,6 +95,20 @@ export function riyadhEnergyDayKey(date = new Date()) {
   const m = String(dt.getUTCMonth() + 1).padStart(2, "0");
   const d = String(dt.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+/** 6:00 AM Asia/Riyadh of the current energy day. */
+export function riyadhEnergyDayStart(date = new Date()) {
+  const key = riyadhEnergyDayKey(date);
+  return new Date(`${key}T${String(ENERGY_RESET_HOUR - RIYADH_OFFSET_HOURS).padStart(2, "0")}:00:00.000Z`);
+}
+
+/** True when HA has not pushed a new reading since this energy day started. */
+export function isMeterStale(lastUpdated: string | undefined, date = new Date()) {
+  if (!lastUpdated) return false;
+  const t = Date.parse(lastUpdated);
+  if (!Number.isFinite(t)) return false;
+  return t < riyadhEnergyDayStart(date).getTime() - 60_000;
 }
 
 /** Live kWh since the 6:00 AM snapshot. Missing baseline counts as "just reset" (0). */

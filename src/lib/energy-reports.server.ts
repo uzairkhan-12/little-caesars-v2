@@ -164,6 +164,12 @@ export type EnergyOverview = {
   todayKey: string;
   today: EnergyDayPoint;
   week: EnergyCompare;
+  weekToDate: EnergyCompare;
+  todayLastWeek: number | null;
+  todayLastYear: number | null;
+  yesterdayPrevious: number | null;
+  yesterdayLastWeek: number | null;
+  yesterdayLastYear: number | null;
   month: EnergyCompare;
   year: EnergyCompare;
   days: EnergyDayPoint[];
@@ -221,6 +227,15 @@ function overviewFromDays(todayKey: string, allDays: EnergyDayPoint[], extra: { 
   const weekFrom = addCalendarKey(weekTo, -6);
   const lastWeekTo = addCalendarKey(weekFrom, -1);
   const lastWeekFrom = addCalendarKey(lastWeekTo, -6);
+  const yesterdayKey = lastClosed?.dayKey ?? addCalendarKey(todayKey, -1);
+  const lastYearOf = (key: string) => `${Number(key.slice(0, 4)) - 1}${key.slice(4)}`;
+  const pointTotal = (key: string) => {
+    const hit = allDays.find((d) => d.dayKey === key);
+    return hit ? hit.total : null;
+  };
+  const weekFromSat = weekStartSaturday(todayKey);
+  const weekClosed = lastClosed ? sumRange(allDays, weekFromSat, lastClosed.dayKey) : 0;
+  const prevWeekSameDays = sumRange(allDays, addCalendarKey(weekFromSat, -7), addCalendarKey(todayKey, -7));
 
   const mtdTo = throughDay ? clampToMonthDay(thisMonth, throughDay) : `${thisMonth}-01`;
   const prevTo = clampToMonthDay(prevMonth, Math.max(throughDay, 1));
@@ -285,6 +300,16 @@ function overviewFromDays(todayKey: string, allDays: EnergyDayPoint[], extra: { 
       previous: weekPrevious,
       changePct: changePct(weekCurrent, weekPrevious),
     },
+    weekToDate: {
+      current: weekClosed,
+      previous: prevWeekSameDays,
+      changePct: changePct(weekClosed, prevWeekSameDays),
+    },
+    todayLastWeek: pointTotal(addCalendarKey(todayKey, -7)),
+    todayLastYear: pointTotal(lastYearOf(todayKey)),
+    yesterdayPrevious: pointTotal(addCalendarKey(yesterdayKey, -1)),
+    yesterdayLastWeek: pointTotal(addCalendarKey(yesterdayKey, -7)),
+    yesterdayLastYear: pointTotal(lastYearOf(yesterdayKey)),
     month: {
       current: monthCurrent,
       previous: monthPrevious,
@@ -348,6 +373,14 @@ function entityTable(entityId: string): ReportTable | null {
 function addCalendarKey(dayKey: string, delta: number) {
   const [y, m, d] = dayKey.split("-");
   return addCalendarDays(y, m, d, delta);
+}
+
+/** Saturday start (Saudi week). */
+function weekStartSaturday(dayKey: string) {
+  const [y, m, d] = dayKey.split("-");
+  const dt = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  const back = (dt.getUTCDay() + 1) % 7;
+  return addCalendarDays(y, m, d, -back);
 }
 
 function monthKey(dayKey: string) {

@@ -17,11 +17,18 @@ import {
 } from "recharts";
 import { Shell } from "@/components/Shell";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChainKpiGrid, BranchesBoard, type ChainRange } from "@/components/ChainBoard";
 import { getGateStatus } from "@/lib/gate.functions";
-import { getEnergyOverview } from "@/lib/energy-reports.functions";
+import { getEnergyBaselines, getEnergyOverview } from "@/lib/energy-reports.functions";
 import { getVisitorOverview } from "@/lib/lc.functions";
 import { getStates, type HAState } from "@/lib/ha.functions";
-import { REPORT_TABLE_LABELS, REPORT_TABLES, type ReportTable } from "@/lib/energy-devices";
+import {
+  REPORT_DEVICES,
+  REPORT_TABLE_LABELS,
+  REPORT_TABLES,
+  todayConsumption,
+  type ReportTable,
+} from "@/lib/energy-devices";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
@@ -37,16 +44,10 @@ export const Route = createFileRoute("/")({
   component: OverviewPage,
 });
 
-type Range = "today" | "mtd" | "quarter" | "year";
+type Range = ChainRange;
 
 function formatKwh(n: number, digits = 0) {
   return n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-
-function formatSar(n: number) {
-  const abs = Math.abs(n);
-  const body = abs.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return `SAR ${body}`;
 }
 
 function formatVisits(n: number) {
@@ -56,13 +57,6 @@ function formatVisits(n: number) {
 
 function monthLong(dayKey: string) {
   return format(parse(dayKey, "yyyy-MM-dd", new Date()), "MMMM");
-}
-
-function quarterKeys(todayKey: string) {
-  const ym = todayKey.slice(0, 7);
-  const m = Number(ym.slice(5, 7));
-  const start = Math.floor((m - 1) / 3) * 3 + 1;
-  return [0, 1, 2].map((i) => `${ym.slice(0, 4)}-${String(start + i).padStart(2, "0")}`);
 }
 
 const COMPARE_CHART: ChartConfig = {
@@ -81,11 +75,12 @@ const LOAD_CHART: ChartConfig = {
 };
 
 function OverviewPage() {
-  const [range, setRange] = useState<Range>("mtd");
+  const [range, setRange] = useState<Range>("today");
   const [now, setNow] = useState(() => new Date());
   const overviewFn = useServerFn(getEnergyOverview);
   const visitorsFn = useServerFn(getVisitorOverview);
   const statesFn = useServerFn(getStates);
+  const baselinesFn = useServerFn(getEnergyBaselines);
 
   const energy = useQuery({
     queryKey: ["energy-overview"],
@@ -101,6 +96,11 @@ function OverviewPage() {
     queryKey: ["ha", "states"],
     queryFn: () => statesFn(),
     refetchInterval: 15_000,
+  });
+  const baselines = useQuery({
+    queryKey: ["energy-baselines"],
+    queryFn: () => baselinesFn(),
+    refetchInterval: 60_000,
   });
 
   useEffect(() => {
@@ -125,12 +125,16 @@ function OverviewPage() {
     () => buildAlerts(states.data ?? [], e?.closedThrough ?? null, v?.occupancy ?? 0, v?.occupiedTables ?? 0),
     [states.data, e?.closedThrough, v?.occupancy, v?.occupiedTables],
   );
+  const liveTodayKwh = useMemo(
+    () => liveTodayEnergy(states.data ?? [], baselines.data ?? {}),
+    [states.data, baselines.data],
+  );
 
   return (
     <Shell>
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · Riyadh · this branch</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · Al Malqa, Riyadh</p>
           <h1 className="font-display text-4xl lg:text-[56px] tracking-tight mt-2 font-medium">
             Chain <span className="font-normal text-muted-foreground">overview</span>
           </h1>
@@ -139,6 +143,8 @@ function OverviewPage() {
           {(
             [
               ["today", "Today"],
+              ["yesterday", "Yesterday"],
+              ["week", "This week"],
               ["mtd", "Month to date"],
               ["quarter", "Quarter"],
               ["year", "Year"],
@@ -148,7 +154,7 @@ function OverviewPage() {
               key={id}
               type="button"
               onClick={() => setRange(id)}
-              className={`px-4 py-1.5 text-xs uppercase tracking-wider rounded-full transition ${
+              className={`px-3 py-1.5 text-xs uppercase tracking-wider rounded-full transition ${
                 range === id
                   ? "bg-gradient-brand text-primary-foreground shadow-glow"
                   : "text-muted-foreground hover:text-foreground"
@@ -186,15 +192,25 @@ function OverviewPage() {
 
       {e && (
         <>
-          <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-10 items-start">
-            <EnergyAngleSection energy={e as EnergyData} visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS} range={range} />
-            {v ? (
-              <BusinessAngle visitors={v as VisitorData} energy={e as EnergyData} range={range} />
-            ) : (
-              <p className="text-sm text-muted-foreground">Loading business insights…</p>
-            )}
+          <ChainKpiGrid
+            energy={e as EnergyData}
+            visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
+            range={range}
+            liveTodayKwh={liveTodayKwh}
+          />
+          <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-10 items-stretch">
+            <div className="min-w-0 h-full">
+              <EnergyAngleSection energy={e as EnergyData} />
+            </div>
+            <div className="min-w-0 h-full">
+              <BusinessAngle visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS} />
+            </div>
           </div>
           <EnergyDetailSection energy={e as EnergyData} />
+          <BranchesBoard
+            energy={e as EnergyData}
+            visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
+          />
         </>
       )}
     </Shell>
@@ -246,11 +262,23 @@ type VisitorData = {
   quarter: number;
   yearToDate: number;
   throughDay: number;
-  cumulative: Array<{ day: number; current: number; previous: number; year: number }>;
+  cumulative: Array<{ day: number; current: number | null; previous: number | null; year: number | null }>;
   dayparts: Array<{ name: string; current: number }>;
   heatmap: Array<{ dow: number; name: string; hours: number[] }>;
   busiest: string | null;
   quietest: string | null;
+  todayHourly: number[];
+  lastWeekdayVisits: number | null;
+  lastWeekdayName: string | null;
+  yesterdayVisits: number;
+  yesterdayLastWeek: number | null;
+  week: number;
+  prevWeek: number | null;
+  weekChangePct: number | null;
+  quarterLastYear: number | null;
+  quarterChangePct: number | null;
+  yearLastYear: number | null;
+  yearYtdChangePct: number | null;
 };
 
 const EMPTY_VISITORS: VisitorData = {
@@ -274,48 +302,21 @@ const EMPTY_VISITORS: VisitorData = {
   heatmap: [],
   busiest: null,
   quietest: null,
+  todayHourly: [],
+  lastWeekdayVisits: null,
+  lastWeekdayName: null,
+  yesterdayVisits: 0,
+  yesterdayLastWeek: null,
+  week: 0,
+  prevWeek: null,
+  weekChangePct: null,
+  quarterLastYear: null,
+  quarterChangePct: null,
+  yearLastYear: null,
+  yearYtdChangePct: null,
 };
 
-function energySlice(energy: EnergyData, range: Range) {
-  const ym = energy.todayKey.slice(0, 7);
-  if (range === "today") {
-    return { current: energy.today.total, previous: null as number | null, year: null as number | null, changePct: null as number | null, yearPct: null as number | null };
-  }
-  if (range === "mtd") {
-    return {
-      current: energy.month.current,
-      previous: energy.month.previous,
-      year: energy.year.previous,
-      changePct: energy.month.changePct,
-      yearPct: energy.year.changePct,
-    };
-  }
-  const keys = range === "quarter" ? quarterKeys(energy.todayKey) : energy.yearMonths.filter((m) => m.month.startsWith(ym.slice(0, 4))).map((m) => m.month);
-  const rows = energy.yearMonths.filter((m) => keys.includes(m.month));
-  const current = rows.reduce((s, r) => s + r.total, 0);
-  const year = rows.reduce((s, r) => s + r.prevYear, 0);
-  const yearPct = year ? ((current - year) / year) * 100 : null;
-  return { current, previous: null as number | null, year, changePct: null as number | null, yearPct };
-}
-
-function visitorSlice(visitors: VisitorData, range: Range) {
-  if (range === "today") return visitors.todayVisits;
-  if (range === "quarter") return visitors.quarter ?? 0;
-  if (range === "year") return visitors.yearToDate ?? 0;
-  return visitors.mtd;
-}
-
-function EnergyAngleSection({ energy, visitors, range }: { energy: EnergyData; visitors: VisitorData; range: Range }) {
-  const slice = energySlice(energy, range);
-  const cost = slice.current * energy.tariffSarPerKwh;
-  const prevCost = slice.previous == null ? null : slice.previous * energy.tariffSarPerKwh;
-  const visits = visitorSlice(visitors, range);
-  const kwhPerCust = visits > 0 ? slice.current / visits : null;
-  const saved = slice.year != null ? (slice.year - slice.current) * energy.tariffSarPerKwh : energy.savedVsYearSar;
-  const ytdSaved = energy.yearMonths
-    .filter((m) => m.month.startsWith(energy.todayKey.slice(0, 4)))
-    .reduce((s, m) => s + (m.prevYear - m.total) * energy.tariffSarPerKwh, 0);
-  const topLoad = [...energy.load].sort((a, b) => b.current - a.current)[0];
+function EnergyAngleSection({ energy }: { energy: EnergyData }) {
   const loadRows = energy.load.map((row) => ({
     name: REPORT_TABLE_LABELS[row.id],
     current: row.current,
@@ -325,7 +326,7 @@ function EnergyAngleSection({ energy, visitors, range }: { energy: EnergyData; v
   const month = monthLong(energy.todayKey);
 
   return (
-    <section>
+    <section className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Angle 1</p>
@@ -339,35 +340,7 @@ function EnergyAngleSection({ energy, visitors, range }: { energy: EnergyData; v
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Kpi label={range === "today" ? "Energy today" : range === "quarter" ? "Energy this quarter" : range === "year" ? "Energy this year" : "Energy month to date"} value={`${formatKwh(slice.current)} kWh`}>
-          <Delta pct={slice.changePct} vs="vs last month, same days" />
-          <Delta pct={slice.yearPct} vs={`vs ${month} last year`} />
-        </Kpi>
-        <Kpi label="Energy cost" value={formatSar(cost)} hint={`${energy.tariffSarPerKwh.toFixed(2)} SAR per kWh`}>
-          {prevCost != null && <Delta amount={cost - prevCost} vs="vs last month, same days" />}
-        </Kpi>
-        <Kpi
-          label="kWh per customer"
-          value={kwhPerCust == null ? "—" : `${kwhPerCust.toFixed(2)} kWh`}
-          hint={visits > 0 ? `${formatVisits(visits)} customer visits in range` : "Need customer visits"}
-        />
-        <Kpi
-          label="Saved vs last year"
-          value={saved == null ? "—" : saved >= 0 ? `${formatSar(saved)} saved` : `${formatSar(saved)} more`}
-          hint={`Year to date ${formatSar(ytdSaved)}`}
-        />
-        <Kpi
-          label={`Projected ${month}`}
-          value={energy.projected == null ? "—" : `${formatKwh(energy.projected)} kWh`}
-          hint={energy.throughDay ? `From ${energy.throughDay} closed days` : "Needs a closed day this month"}
-        />
-        <Kpi label="Last 7 closed days" value={`${formatKwh(energy.week.current)} kWh`}>
-          <Delta pct={energy.week.changePct} vs="vs previous week" />
-        </Kpi>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Panel title="This month vs last month vs last year" hint="Cumulative energy (kWh), compared on the same days.">
           {energy.cumulative.length ? (
             <ChartContainer config={COMPARE_CHART} className="aspect-auto h-64">
@@ -402,8 +375,8 @@ function EnergyAngleSection({ energy, visitors, range }: { energy: EnergyData; v
         </Panel>
       </div>
 
-      <div className="mt-4">
-        <Panel title="12 month trend vs previous year" hint={`${month} is month to date.`}>
+      <div className="mt-4 flex-1 flex">
+        <Panel className="w-full h-full" title="12 month trend vs previous year" hint={`${month} is month to date.`}>
           <ChartContainer config={LOAD_CHART} className="aspect-auto h-72">
             <ComposedChart data={energy.yearMonths} margin={{ left: 4, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -418,19 +391,6 @@ function EnergyAngleSection({ energy, visitors, range }: { energy: EnergyData; v
             </ComposedChart>
           </ChartContainer>
         </Panel>
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-gradient-card border border-border shadow-soft overflow-hidden">
-        <div className="px-5 py-4 border-b border-border/60">
-          <h3 className="font-display text-xl tracking-wider">This branch</h3>
-          <p className="text-xs text-muted-foreground mt-1">Month to date · kWh per customer where visits exist.</p>
-        </div>
-        <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <Stat label="Branch" value="This branch" />
-          <Stat label="kWh / customer" value={kwhPerCust == null ? "—" : kwhPerCust.toFixed(2)} />
-          <Stat label="Energy MTD" value={`${formatKwh(energy.month.current)} kWh`} />
-          <Stat label="Main driver" value={topLoad ? REPORT_TABLE_LABELS[topLoad.id] : "—"} />
-        </div>
       </div>
     </section>
   );
@@ -529,23 +489,9 @@ function Last14DaysChart({
   );
 }
 
-function BusinessAngle({ visitors, energy, range }: { visitors: VisitorData; energy: EnergyData; range: Range }) {
-  const visits = visitorSlice(visitors, range);
-  const peakLabel =
-    visitors.todayPeakHour == null
-      ? null
-      : `${((visitors.todayPeakHour + 11) % 12) + 1} ${visitors.todayPeakHour >= 12 ? "PM" : "AM"}`;
-  const visitLabel =
-    range === "today"
-      ? "Customer visits today"
-      : range === "quarter"
-        ? "Customer visits this quarter"
-        : range === "year"
-          ? "Customer visits this year"
-          : "Customer visits month to date";
-
+function BusinessAngle({ visitors }: { visitors: VisitorData }) {
   return (
-    <section>
+    <section className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Angle 2</p>
@@ -559,41 +505,22 @@ function BusinessAngle({ visitors, energy, range }: { visitors: VisitorData; ene
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Kpi label={visitLabel} value={formatVisits(visits)}>
-          {range === "mtd" && (
-            <>
-              <Delta pct={visitors.mtdChangePct} vs="vs last month, same days" invert />
-              <Delta pct={visitors.yearChangePct} vs={`vs ${monthLong(energy.todayKey)} last year`} invert />
-            </>
-          )}
-        </Kpi>
-        <Kpi label="Customer visits today" value={formatVisits(visitors.todayVisits)} hint={peakLabel ? `Peak so far: ${peakLabel}` : "Waiting on today’s counts"} />
-        <Kpi
-          label="Tables occupied"
-          value={`${visitors.occupiedTables} / ${visitors.tables || "—"}`}
-          hint={`${visitors.occupancy} people on the floor`}
-        />
-        <Kpi
-          label="Table use now"
-          value={visitors.tableUsePct == null ? "—" : `${visitors.tableUsePct.toFixed(0)} %`}
-        />
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4">
-        <Panel title="This month vs last month vs last year" hint="Cumulative customer visits, compared on the same days.">
+      <div className="grid grid-cols-1 gap-4">
+        <Panel
+          title="This month vs last month"
+          hint="Customers entered each day, same count as Statistics. Day 1 this month vs day 1 last month, and so on."
+        >
           {visitors.cumulative.length ? (
             <ChartContainer config={COMPARE_CHART} className="aspect-auto h-64">
-              <AreaChart data={visitors.cumulative} margin={{ left: 4, right: 8, top: 8 }}>
+              <BarChart data={visitors.cumulative} margin={{ left: 4, right: 8, top: 8 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatVisits(Number(v))} />
-                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartTooltip content={<ChartTooltipContent labelFormatter={(_v, p) => `Day ${p?.[0]?.payload?.day ?? ""}`} />} />
                 <ChartLegend content={<ChartLegendContent />} />
-                <Area dataKey="year" type="monotone" stroke="var(--color-year)" fill="var(--color-year)" fillOpacity={0.08} strokeDasharray="5 5" />
-                <Area dataKey="previous" type="monotone" stroke="var(--color-previous)" fill="var(--color-previous)" fillOpacity={0.12} />
-                <Area dataKey="current" type="monotone" stroke="var(--color-current)" fill="var(--color-current)" fillOpacity={0.28} />
-              </AreaChart>
+                <Bar dataKey="previous" fill="var(--color-previous)" radius={3} maxBarSize={10} />
+                <Bar dataKey="current" fill="var(--color-current)" radius={3} maxBarSize={10} />
+              </BarChart>
             </ChartContainer>
           ) : (
             <EmptyChart />
@@ -612,13 +539,15 @@ function BusinessAngle({ visitors, energy, range }: { visitors: VisitorData; ene
         </Panel>
       </div>
 
-      <div className="mt-4">
-        <Panel title="When customers come" hint="Average customer visits by weekday and hour, last 4 weeks.">
-          <Heatmap rows={visitors.heatmap} />
-          <p className="text-xs text-muted-foreground mt-3">
-            {visitors.busiest ? `Busiest: ${visitors.busiest}` : ""}
-            {visitors.quietest ? ` · Quietest: ${visitors.quietest}` : ""}
-          </p>
+      <div className="mt-4 flex-1 flex">
+        <Panel className="w-full h-full" title="When customers come" hint="Average customer visits by weekday and hour, last 4 weeks.">
+          <div className="h-72 flex flex-col justify-center">
+            <Heatmap rows={visitors.heatmap} />
+            <p className="text-xs text-muted-foreground mt-3">
+              {visitors.busiest ? `Busiest: ${visitors.busiest}` : ""}
+              {visitors.quietest ? ` · Quietest: ${visitors.quietest}` : ""}
+            </p>
+          </div>
         </Panel>
       </div>
     </section>
@@ -631,7 +560,7 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[520px]">
-        <div className="grid grid-cols-[7rem_repeat(24,minmax(0,1fr))] gap-0.5 text-[10px] text-muted-foreground mb-1">
+        <div className="grid grid-cols-[4.5rem_repeat(24,minmax(0,1fr))] gap-1 text-[10px] text-muted-foreground mb-2">
           <div />
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} className="text-center">
@@ -639,22 +568,24 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
             </div>
           ))}
         </div>
-        {rows.map((row) => (
-          <div key={row.name} className="grid grid-cols-[7rem_repeat(24,minmax(0,1fr))] gap-0.5 mb-0.5">
-            <div className="text-xs text-muted-foreground truncate pr-2">{row.name.slice(0, 3)}</div>
-            {row.hours.map((n, h) => {
-              const t = n / max;
-              return (
-                <div
-                  key={h}
-                  title={`${row.name} ${h}:00 · ${n.toFixed(0)}`}
-                  className="h-4 rounded-sm"
-                  style={{ background: `color-mix(in oklab, var(--primary) ${Math.round(t * 100)}%, var(--muted))` }}
-                />
-              );
-            })}
-          </div>
-        ))}
+        <div className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <div key={row.name} className="grid grid-cols-[4.5rem_repeat(24,minmax(0,1fr))] gap-1">
+              <div className="text-xs text-muted-foreground truncate pr-2 flex items-center">{row.name.slice(0, 3)}</div>
+              {row.hours.map((n, h) => {
+                const t = n / max;
+                return (
+                  <div
+                    key={h}
+                    title={`${row.name} ${h}:00 · ${n.toFixed(0)}`}
+                    className="aspect-square rounded-[4px]"
+                    style={{ background: `color-mix(in oklab, var(--primary) ${Math.round(t * 100)}%, var(--muted))` }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -695,6 +626,24 @@ function haNum(states: HAState[], id: string) {
   const raw = states.find((s) => s.entity_id === id)?.state;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
+}
+
+function liveTodayEnergy(states: HAState[], baselines: Record<string, number>) {
+  let sum = 0;
+  let any = false;
+  for (const table of REPORT_TABLES) {
+    for (const device of REPORT_DEVICES[table]) {
+      const raw = states.find((s) => s.entity_id === device.entityId)?.state;
+      if (raw == null || raw === "" || raw === "unknown" || raw === "unavailable") continue;
+      const current = Number(raw);
+      if (!Number.isFinite(current)) continue;
+      const used = todayConsumption(current, baselines[device.entityId]);
+      if (used == null) continue;
+      sum += used;
+      any = true;
+    }
+  }
+  return any ? sum : 0;
 }
 
 function buildAlerts(states: HAState[], closedThrough: string | null, occupancy: number, occupiedTables: number) {
@@ -740,60 +689,9 @@ function buildAlerts(states: HAState[], closedThrough: string | null, occupancy:
   return out.slice(0, 6);
 }
 
-function Kpi({
-  label,
-  value,
-  hint,
-  children,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  children?: ReactNode;
-}) {
+function Panel({ title, hint, children, className }: { title: string; hint: string; children: ReactNode; className?: string }) {
   return (
-    <div className="rounded-[22px] bg-gradient-card border border-border p-5 shadow-soft">
-      <span className="text-[11px] uppercase tracking-[0.16em] text-accent">{label}</span>
-      <div className="font-display text-[32px] sm:text-[40px] leading-none tabular-nums mt-3 font-medium">{value}</div>
-      {hint && <div className="text-xs mt-2 text-muted-foreground">{hint}</div>}
-      {children}
-    </div>
-  );
-}
-
-function Delta({
-  pct,
-  vs,
-  amount,
-  invert,
-}: {
-  pct?: number | null;
-  vs: string;
-  amount?: number;
-  invert?: boolean;
-}) {
-  if (amount != null) {
-    const down = amount < 0;
-    const good = invert ? !down : down;
-    return (
-      <div className={`text-xs mt-1 ${amount === 0 ? "text-muted-foreground" : good ? "text-success" : "text-warning"}`}>
-        {down ? "▼" : amount > 0 ? "▲" : "●"} {formatSar(amount)} {vs}
-      </div>
-    );
-  }
-  if (pct == null) return <div className="text-xs mt-1 text-muted-foreground">Need more days {vs}</div>;
-  const down = pct < 0;
-  const good = invert ? !down : down;
-  return (
-    <div className={`text-xs mt-1 ${pct === 0 ? "text-muted-foreground" : good ? "text-success" : "text-warning"}`}>
-      {down ? "▼" : pct > 0 ? "▲" : "●"} {Math.abs(pct).toFixed(1)}% {vs}
-    </div>
-  );
-}
-
-function Panel({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
+    <div className={`rounded-2xl bg-gradient-card border border-border shadow-soft p-5 ${className ?? ""}`}>
       <h3 className="font-display text-xl tracking-wider">{title}</h3>
       <p className="text-xs text-muted-foreground mt-1 mb-4">{hint}</p>
       {children}
@@ -803,13 +701,4 @@ function Panel({ title, hint, children }: { title: string; hint: string; childre
 
 function EmptyChart() {
   return <div className="h-64 grid place-items-center text-xs text-muted-foreground">No data in this range yet.</div>;
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="font-medium mt-1">{value}</div>
-    </div>
-  );
 }

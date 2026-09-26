@@ -241,6 +241,19 @@ function clampDayKey(ym: string, day: number) {
   return `${ym}-${String(Math.min(Math.max(day, 1), daysInMonthKey(ym))).padStart(2, "0")}`;
 }
 
+function addDaysKey(dayKey: string, delta: number) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + delta));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+function weekStartSaturday(dayKey: string) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const back = (dt.getUTCDay() + 1) % 7;
+  return addDaysKey(dayKey, -back);
+}
+
 function pctChange(current: number, previous: number | null) {
   if (previous == null) return null;
   if (previous === 0) return current === 0 ? 0 : 100;
@@ -249,6 +262,17 @@ function pctChange(current: number, previous: number | null) {
 
 function sumVisits(days: DayBucket[], from: string, to: string) {
   return days.filter((d) => d.date >= from && d.date <= to).reduce((s, d) => s + d.entries, 0);
+}
+
+/** Customers entered that calendar day. Missing camera days stay null so we do not draw a fake 0. */
+function dailyEntries(days: DayBucket[], ym: string, throughDay: number): Array<number | null> {
+  const byDay = new Map(
+    days.filter((d) => d.date.startsWith(ym)).map((d) => [Number(d.date.slice(8, 10)), d.entries]),
+  );
+  return Array.from({ length: throughDay }, (_, i) => {
+    const day = i + 1;
+    return byDay.has(day) ? (byDay.get(day) ?? 0) : null;
+  });
 }
 
 const DAYPARTS: Array<{ name: string; hours: number[] }> = [
@@ -277,11 +301,23 @@ export type VisitorOverview = {
   quarter: number;
   yearToDate: number;
   throughDay: number;
-  cumulative: Array<{ day: number; current: number; previous: number; year: number }>;
+  cumulative: Array<{ day: number; current: number | null; previous: number | null; year: number | null }>;
   dayparts: Array<{ name: string; current: number }>;
   heatmap: Array<{ dow: number; name: string; hours: number[] }>;
   busiest: string | null;
   quietest: string | null;
+  todayHourly: number[];
+  lastWeekdayVisits: number | null;
+  lastWeekdayName: string | null;
+  yesterdayVisits: number;
+  yesterdayLastWeek: number | null;
+  week: number;
+  prevWeek: number | null;
+  weekChangePct: number | null;
+  quarterLastYear: number | null;
+  quarterChangePct: number | null;
+  yearLastYear: number | null;
+  yearYtdChangePct: number | null;
 };
 
 export const getVisitorOverview = createServerFn({ method: "GET" }).handler(async () => {
@@ -347,15 +383,15 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
   const quarter = sumVisits(daily, quarterFrom, todayKey);
   const yearToDate = sumVisits(daily, `${thisMonth.slice(0, 4)}-01-01`, todayKey);
 
-  const cumulative = Array.from({ length: throughDay }, (_, i) => {
-    const d = i + 1;
-    return {
-      day: d,
-      current: sumVisits(daily, `${thisMonth}-01`, clampDayKey(thisMonth, d)),
-      previous: sumVisits(daily, `${prevMonth}-01`, clampDayKey(prevMonth, d)),
-      year: sumVisits(daily, `${lastYear}-01`, clampDayKey(lastYear, d)),
-    };
-  });
+  const currentDays = dailyEntries(daily, thisMonth, throughDay);
+  const previousDays = dailyEntries(daily, prevMonth, throughDay);
+  const yearDays = dailyEntries(daily, lastYear, throughDay);
+  const cumulative = currentDays.map((current, i) => ({
+    day: i + 1,
+    current,
+    previous: previousDays[i] ?? null,
+    year: yearDays[i] ?? null,
+  }));
 
   const avgHour = Array.from({ length: 24 }, () => 0);
   for (const raw of dowRaws) {
@@ -394,6 +430,30 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
     return best;
   }, null);
 
+  const lastWeekKey = addDaysKey(todayKey, -7);
+  const lastWeekRow = daily.find((d) => d.date === lastWeekKey);
+  const lastWeekdayName = DOW_NAMES[new Date(`${todayKey}T12:00:00+03:00`).getDay()] ?? null;
+  const yesterdayKey = addDaysKey(todayKey, -1);
+  const yesterdayVisits = sumVisits(daily, yesterdayKey, yesterdayKey);
+  const yesterdayWeekKey = addDaysKey(yesterdayKey, -7);
+  const yesterdayLastWeek = daily.some((d) => d.date === yesterdayWeekKey)
+    ? sumVisits(daily, yesterdayWeekKey, yesterdayWeekKey)
+    : null;
+  const weekFrom = weekStartSaturday(todayKey);
+  const week = sumVisits(daily, weekFrom, todayKey);
+  const prevWeekFrom = addDaysKey(weekFrom, -7);
+  const prevWeekTo = addDaysKey(todayKey, -7);
+  const prevWeekHas = daily.some((d) => d.date >= prevWeekFrom && d.date <= prevWeekTo);
+  const prevWeek = prevWeekHas ? sumVisits(daily, prevWeekFrom, prevWeekTo) : null;
+  const lastYearQuarterFrom = `${Number(thisMonth.slice(0, 4)) - 1}-${String(qStartMonth).padStart(2, "0")}-01`;
+  const lastYearQuarterTo = clampDayKey(`${Number(thisMonth.slice(0, 4)) - 1}-${thisMonth.slice(5, 7)}`, throughDay);
+  const quarterLastYearHas = daily.some((d) => d.date >= lastYearQuarterFrom && d.date <= lastYearQuarterTo);
+  const quarterLastYear = quarterLastYearHas ? sumVisits(daily, lastYearQuarterFrom, lastYearQuarterTo) : null;
+  const yearLastFrom = `${Number(thisMonth.slice(0, 4)) - 1}-01-01`;
+  const yearLastTo = clampDayKey(`${Number(thisMonth.slice(0, 4)) - 1}-${thisMonth.slice(5, 7)}`, throughDay);
+  const yearLastHas = daily.some((d) => d.date >= yearLastFrom && d.date <= yearLastTo);
+  const yearLastYear = yearLastHas ? sumVisits(daily, yearLastFrom, yearLastTo) : null;
+
   const out: VisitorOverview = {
     todayVisits: today.entries,
     todayPeakHour: peakHour && peakHour.visits > 0 ? peakHour.hour : null,
@@ -415,6 +475,18 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
     heatmap,
     busiest: busiest?.label ?? null,
     quietest: quietest?.label ?? null,
+    todayHourly: Array.from({ length: 24 }, (_, h) => hourly.find((b) => b.hour === h)?.entries ?? 0),
+    lastWeekdayVisits: lastWeekRow ? lastWeekRow.entries : null,
+    lastWeekdayName,
+    yesterdayVisits,
+    yesterdayLastWeek,
+    week,
+    prevWeek,
+    weekChangePct: pctChange(week, prevWeek),
+    quarterLastYear,
+    quarterChangePct: pctChange(quarter, quarterLastYear),
+    yearLastYear,
+    yearYtdChangePct: pctChange(yearToDate, yearLastYear),
   };
   return out;
 });
