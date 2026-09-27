@@ -151,6 +151,15 @@ function Kpi({
   );
 }
 
+function BarTip({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-1 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-center text-[11px] text-popover-foreground shadow-md group-hover:block">
+      <div className="font-medium">{label}</div>
+      <div className="tabular-nums text-muted-foreground">{value} customers</div>
+    </div>
+  );
+}
+
 function HourlyChart({
   hourly,
 }: {
@@ -161,19 +170,23 @@ function HourlyChart({
     : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
   const max = Math.max(1, ...rows.map((h) => h.entries));
   return (
-    <div className="relative pt-2">
+    <div className="relative overflow-visible pt-2">
       <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="border-t border-border/45" />
         ))}
       </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
+      <div className="relative flex items-end justify-between gap-1 h-56 px-1">
         {rows.map((h) => {
           const scale = (v: number) => (v / max) * 100;
           return (
-            <div key={h.hour} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center" title={`${formatHour12(h.hour)} — ${h.entries} customers`}>
-                <div className="w-4 rounded-t bg-warning" style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }} />
+            <div key={h.hour} className="group relative h-full min-w-0 flex-1 flex flex-col items-center gap-2">
+              <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
+                <BarTip label={formatHour12(h.hour)} value={h.entries} />
+                <div
+                  className="w-4 max-w-full rounded-t bg-warning group-hover:brightness-110"
+                  style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }}
+                />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums whitespace-nowrap">
                 {h.hour % 3 === 0 ? formatHour12(h.hour) : ""}
@@ -206,22 +219,26 @@ function DailyChart({
   });
   const max = Math.max(1, ...rows.map((d) => d.entries));
   return (
-    <div className="relative pt-2">
+    <div className="relative overflow-visible pt-2">
       <div className="absolute inset-x-0 top-10 bottom-8 grid grid-rows-4 pointer-events-none">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="border-t border-border/45" />
         ))}
       </div>
-      <div className="relative flex items-end justify-between gap-2 h-56 px-1">
+      <div className="relative flex items-end justify-between gap-1 h-56 px-1">
         {rows.map((d, index) => {
           const h = (d.entries / max) * 100;
+          const label = new Date(`${d.date}T12:00:00+03:00`).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+          });
           return (
-            <div key={d.date} className="h-full min-w-0 flex-1 flex flex-col items-center gap-2">
-              <div className="w-full flex-1 flex items-end justify-center">
+            <div key={d.date} className="group relative h-full min-w-0 flex-1 flex flex-col items-center gap-2">
+              <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
+                <BarTip label={label} value={d.entries} />
                 <div
-                  className="w-full max-w-5 rounded-t bg-warning/85 hover:bg-warning transition-colors"
+                  className="w-full max-w-5 rounded-t bg-warning/85 group-hover:bg-warning transition-colors"
                   style={{ height: `${d.entries ? Math.max(h, 3) : 0}%` }}
-                  title={`${d.date} — ${d.entries} customers entered`}
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums">
