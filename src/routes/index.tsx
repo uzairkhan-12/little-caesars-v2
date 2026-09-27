@@ -134,7 +134,7 @@ function OverviewPage() {
     <Shell>
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · Al Malqa, Riyadh</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · Al Mughrizat, Riyadh</p>
           <h1 className="font-display text-4xl lg:text-[56px] tracking-tight mt-2 font-medium">
             Chain <span className="font-normal text-muted-foreground">overview</span>
           </h1>

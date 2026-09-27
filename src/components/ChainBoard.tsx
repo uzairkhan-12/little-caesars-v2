@@ -58,7 +58,7 @@ const REGIONS = ["All regions", "Riyadh", "Jeddah", "East"] as const;
 type Region = (typeof REGIONS)[number];
 
 const BRANCHES = [
-  { id: "al-malqa", name: "Al Malqa, Riyadh", region: "Riyadh" as const, live: true },
+  { id: "al-mughrizat", name: "Al Mughrizat, Riyadh", region: "Riyadh" as const, live: true },
   { id: "hittin", name: "Hittin, Riyadh", region: "Riyadh" as const, live: false },
   { id: "al-rawdah", name: "Al Rawdah, Jeddah", region: "Jeddah" as const, live: false },
   { id: "al-faisaliyah", name: "Al Faisaliyah, Dammam", region: "East" as const, live: false },
@@ -463,7 +463,7 @@ export function BranchesBoard({
             <h2 className="font-display text-2xl tracking-tight">All branches</h2>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Al Malqa is live. Other sites are listed for the chain view and are not integrated yet.
+            Al Mughrizat is live. Other sites are listed for the chain view and are not integrated yet.
           </p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-full bg-background/50 border border-border p-1">
