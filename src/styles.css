@@ -139,6 +139,21 @@
   h3 {
     letter-spacing: -0.02em;
   }
+  html[lang="ar"],
+  html[lang="ar"] body {
+    font-family: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  html[lang="ar"] .font-display,
+  html[lang="ar"] h1,
+  html[lang="ar"] h2,
+  html[lang="ar"] h3 {
+    font-family: "Cairo", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+  html[lang="ar"] .uppercase {
+    text-transform: none;
+    letter-spacing: 0;
+  }
 }
 
 @utility text-gradient-brand {

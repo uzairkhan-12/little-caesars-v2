@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, ArrowUpRight } from "lucide-react";
 import { getDaily, getHourlyByDay, getHourlyByDow, getSummary } from "@/lib/lc.functions";
+import { useI18n } from "@/lib/i18n";
 import { formatHour12 } from "@/lib/utils";
 
 const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -22,6 +23,7 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
   const hourlyByDayFn = useServerFn(getHourlyByDay);
   const hourlyByDowFn = useServerFn(getHourlyByDow);
 
+  const { t, lang, locale, known } = useI18n();
   const today = riyadhTodayKey();
   const [filter, setFilter] = useState("today");
   const isToday = filter === "today";
@@ -67,17 +69,17 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
   return (
     <section className={className ?? "mt-12"}>
       <div className="mb-5">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Customer visits</p>
-        <h2 className="font-display text-3xl tracking-tight font-medium mt-1">When people came in</h2>
-        <p className="text-sm text-muted-foreground mt-1">Entries by hour and the last 14 days, same charts as Statistics.</p>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("visitsEyebrow")}</p>
+        <h2 className="font-display text-3xl tracking-tight font-medium mt-1">{t("whenPeople")}</h2>
+        <p className="text-sm text-muted-foreground mt-1">{t("whenPeopleHint")}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Kpi label="Entries" value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
+        <Kpi label={t("entries")} value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
         <Kpi
-          label="Peak hour"
-          value={formatHour12(peak.hour)}
-          hint={`${peak.total} customers`}
+          label={t("peakHour")}
+          value={formatHour12(peak.hour, lang)}
+          hint={t("customersCount", { count: peak.total })}
           icon={Activity}
           tone="accent"
         />
@@ -86,33 +88,37 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-3 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-            <h3 className="font-display text-2xl tracking-wider">Customers entered — by hour</h3>
+            <h3 className="font-display text-2xl tracking-wider">{t("enteredByHour")}</h3>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="h-9 rounded-lg border border-border bg-input px-3 text-sm outline-none focus:border-primary transition cursor-pointer"
             >
-              <option value="today">Today (actual)</option>
+              <option value="today">{t("todayActual")}</option>
               {DOW_LABELS.map((label, i) => (
-                <option key={label} value={`dow:${i}`}>{label} avg (30d)</option>
+                <option key={label} value={`dow:${i}`}>{t("dowAvg", { day: known(label) })}</option>
               ))}
             </select>
           </div>
           {hourlyLoading ? (
-            <div className="h-56 grid place-items-center text-xs text-muted-foreground animate-pulse">Loading…</div>
+            <div className="h-56 grid place-items-center text-xs text-muted-foreground animate-pulse">{t("loading")}</div>
           ) : (
             <>
               <HourlyChart hourly={hourlyData} />
               {isDow && hourlyDow && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {hourlyDow.meta?.dow_name} average over last {hourlyDow.meta?.days_range} days ({hourlyDow.meta?.occurrences} {hourlyDow.meta?.dow_name}s)
+                  {t("dowAverage", {
+                    day: known(hourlyDow.meta?.dow_name ?? ""),
+                    days: hourlyDow.meta?.days_range ?? 0,
+                    count: hourlyDow.meta?.occurrences ?? 0,
+                  })}
                 </p>
               )}
             </>
           )}
         </div>
         <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <h3 className="font-display text-2xl tracking-wider mb-4">Customers entered — last 14 days</h3>
+          <h3 className="font-display text-2xl tracking-wider mb-4">{t("entered14")}</h3>
           <DailyChart days={daily?.days ?? []} />
         </div>
       </div>
@@ -152,10 +158,11 @@ function Kpi({
 }
 
 function BarTip({ label, value }: { label: string; value: number }) {
+  const { t } = useI18n();
   return (
     <div className="pointer-events-none absolute left-1/2 top-1 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-center text-[11px] text-popover-foreground shadow-md group-hover:block">
       <div className="font-medium">{label}</div>
-      <div className="tabular-nums text-muted-foreground">{value} customers</div>
+      <div className="tabular-nums text-muted-foreground">{t("customersTip", { count: value })}</div>
     </div>
   );
 }
@@ -165,6 +172,7 @@ function HourlyChart({
 }: {
   hourly: Array<{ hour: number; entries: number; exits: number; visits: number }>;
 }) {
+  const { t, lang } = useI18n();
   const rows = hourly.length
     ? hourly
     : Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, visits: 0 }));
@@ -182,21 +190,21 @@ function HourlyChart({
           return (
             <div key={h.hour} className="group relative h-full min-w-0 flex-1 flex flex-col items-center gap-2">
               <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
-                <BarTip label={formatHour12(h.hour)} value={h.entries} />
+                <BarTip label={formatHour12(h.hour, lang)} value={h.entries} />
                 <div
                   className="w-4 max-w-full rounded-t bg-warning group-hover:brightness-110"
                   style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }}
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums whitespace-nowrap">
-                {h.hour % 3 === 0 ? formatHour12(h.hour) : ""}
+                {h.hour % 3 === 0 ? formatHour12(h.hour, lang) : ""}
               </div>
             </div>
           );
         })}
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> Customers entered</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> {t("customersEntered")}</span>
       </div>
     </div>
   );
@@ -207,8 +215,9 @@ function DailyChart({
 }: {
   days: Array<{ date: string; entries: number; exits: number; visits: number }>;
 }) {
+  const { t, locale } = useI18n();
   if (!days.length) {
-    return <div className="h-48 grid place-items-center text-xs text-muted-foreground">No data yet</div>;
+    return <div className="h-48 grid place-items-center text-xs text-muted-foreground">{t("noDataYet")}</div>;
   }
   const byDate = new Map(days.map((d) => [d.date, d]));
   const rows = Array.from({ length: 14 }, (_, i) => {
@@ -228,7 +237,7 @@ function DailyChart({
       <div className="relative flex items-end justify-between gap-1 h-56 px-1">
         {rows.map((d, index) => {
           const h = (d.entries / max) * 100;
-          const label = new Date(`${d.date}T12:00:00+03:00`).toLocaleDateString("en-GB", {
+          const label = new Date(`${d.date}T12:00:00+03:00`).toLocaleDateString(locale, {
             day: "numeric",
             month: "short",
           });

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Clock, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { useI18n } from "@/lib/i18n";
 import { Toggle } from "@/components/Toggle";
 import { getStates, callService } from "@/lib/ha.functions";
 import { getGateStatus } from "@/lib/gate.functions";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/schedules")({
 });
 
 function SchedulesPage() {
+  const { t, locale, known } = useI18n();
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
   const qc = useQueryClient();
@@ -53,8 +55,8 @@ function SchedulesPage() {
 
   return (
     <Shell
-      title="Schedules"
-      subtitle="Automations from Home Assistant — lighting on/off, timers and routines."
+      title={t("navSchedules")}
+      subtitle={t("schedulesSubtitle")}
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {automations.map((a) => {
@@ -79,32 +81,32 @@ function SchedulesPage() {
                   </div>
                   <div>
                     <div className="font-display text-xl tracking-wider">
-                      {(attrs.friendly_name ?? a.entity_id).trim()}
+                      {known((attrs.friendly_name ?? a.entity_id).trim())}
                     </div>
                   </div>
                 </div>
-                <Toggle on={on} onChange={(next) => toggle.mutate({ entity_id: a.entity_id, on: next })} label={attrs.friendly_name ?? "Schedule"} />
+                <Toggle on={on} onChange={(next) => toggle.mutate({ entity_id: a.entity_id, on: next })} label={known(attrs.friendly_name ?? t("schedule"))} />
 
               </div>
               <div className="mt-4 text-xs text-muted-foreground">
-                Last triggered:{" "}
+                {t("lastTriggered")}{" "}
                 <span className="text-foreground">
                   {attrs.last_triggered
-                    ? new Date(attrs.last_triggered).toLocaleString()
-                    : "never"}
+                    ? new Date(attrs.last_triggered).toLocaleString(locale, { timeZone: "Asia/Riyadh" })
+                    : t("never")}
                 </span>
               </div>
               <button
                 onClick={() => trigger.mutate(a.entity_id)}
                 className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium"
               >
-                <Zap className="w-4 h-4" /> Run now
+                <Zap className="w-4 h-4" /> {t("runNow")}
               </button>
             </div>
           );
         })}
         {!automations.length && (
-          <div className="text-sm text-muted-foreground">No automations found.</div>
+          <div className="text-sm text-muted-foreground">{t("noAutomations")}</div>
         )}
       </div>
     </Shell>

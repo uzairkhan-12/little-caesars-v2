@@ -10,6 +10,7 @@ export function Toggle({
   return (
     <button
       type="button"
+      dir="ltr"
       role="switch"
       aria-checked={on}
       aria-label={label}

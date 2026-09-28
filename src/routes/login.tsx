@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Lock, User, Loader2 } from "lucide-react";
 import { login } from "@/lib/gate.functions";
+import { LanguageToggle, useI18n } from "@/lib/i18n";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
 
 type Search = { redirect?: string };
@@ -23,22 +24,26 @@ function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
 
   const mutation = useMutation({
     mutationFn: (v: { username: string; password: string }) => loginFn({ data: v }),
     onSuccess: async (res) => {
       if (!res.ok) {
-        setError("Invalid credentials");
+        setError(t("invalidCredentials"));
         return;
       }
       await router.invalidate();
       router.navigate({ to: search.redirect ?? "/" });
     },
-    onError: () => setError("Something went wrong. Try again."),
+    onError: () => setError(t("loginError")),
   });
 
   return (
     <div className="min-h-screen grid place-items-center bg-background px-4 relative overflow-hidden">
+      <div className="absolute top-4 end-4 z-10">
+        <LanguageToggle />
+      </div>
       <div className="absolute inset-0 pointer-events-none opacity-40">
         <div className="absolute -top-40 -left-40 w-[500px] h-[500px] rounded-full bg-primary/30 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-accent/20 blur-3xl" />
@@ -52,10 +57,10 @@ function LoginPage() {
         <div className="rounded-3xl border border-border bg-gradient-card shadow-soft p-8">
           <div className="text-center mb-6">
             <h1 className="font-display text-3xl tracking-wider text-gradient-brand">
-              COMMAND DECK
+              {t("commandDeck")}
             </h1>
             <p className="mt-1 text-xs uppercase tracking-[0.25em] text-muted-foreground">
-              Restricted access · v2
+              {t("restrictedAccess")}
             </p>
           </div>
 
@@ -69,16 +74,16 @@ function LoginPage() {
           >
             <label className="block">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Username
+                {t("username")}
               </span>
               <div className="mt-1 relative">
-                <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <User className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full h-11 rounded-xl bg-input border border-border pl-10 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition"
+                  className="w-full h-11 rounded-xl bg-input border border-border ps-10 pe-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition"
                   required
                 />
               </div>
@@ -86,16 +91,16 @@ function LoginPage() {
 
             <label className="block">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Password
+                {t("password")}
               </span>
               <div className="mt-1 relative">
-                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Lock className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-11 rounded-xl bg-input border border-border pl-10 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition"
+                  className="w-full h-11 rounded-xl bg-input border border-border ps-10 pe-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition"
                   required
                 />
               </div>
@@ -113,7 +118,7 @@ function LoginPage() {
               className="w-full h-11 rounded-xl bg-gradient-brand text-primary-foreground font-semibold text-sm uppercase tracking-wider shadow-glow hover:opacity-95 disabled:opacity-60 flex items-center justify-center gap-2 transition"
             >
               {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Enter
+              {t("enter")}
             </button>
           </form>
         </div>

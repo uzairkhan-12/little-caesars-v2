@@ -9,6 +9,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { getGateStatus } from "@/lib/gate.functions";
+import { LanguageProvider, useI18n } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { useEffect, type ReactNode } from "react";
 
@@ -16,20 +17,19 @@ import appCss from "../styles.css?url";
 import { reportTelemetryError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="font-display text-8xl text-gradient-brand">404</h1>
-        <h2 className="mt-4 text-xl font-semibold">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          That route isn't wired into the command deck.
-        </p>
+        <h2 className="mt-4 text-xl font-semibold">{t("pageNotFound")}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{t("pageNotFoundDetail")}</p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Back to dashboard
+            {t("backToDashboard")}
           </Link>
         </div>
       </div>
@@ -40,6 +40,7 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const { t } = useI18n();
   useEffect(() => {
   reportTelemetryError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -47,9 +48,9 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold">Something broke</h1>
+        <h1 className="text-xl font-semibold">{t("somethingBroke")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {error.message || "Unknown error"}
+          {error.message || t("unknownError")}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -59,13 +60,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Try again
+            {t("tryAgain")}
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            Home
+            {t("home")}
           </a>
         </div>
       </div>
@@ -125,7 +126,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap",
       },
       {
         rel: "stylesheet",
@@ -146,12 +147,12 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem("lc-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}`,
+            __html: `try{var l=localStorage.getItem("lc-lang");if(l==="ar"){document.documentElement.lang="ar";document.documentElement.dir="rtl"}if(localStorage.getItem("lc-theme")==="light")document.documentElement.classList.remove("dark")}catch(e){}`,
           }}
         />
       </head>
       <body>
-        {children}
+        <LanguageProvider>{children}</LanguageProvider>
         <Scripts />
       </body>
     </html>

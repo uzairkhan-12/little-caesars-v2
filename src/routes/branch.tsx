@@ -25,6 +25,7 @@ import {
 
 } from "lucide-react";
 import { Shell } from "@/components/Shell";
+import { useI18n } from "@/lib/i18n";
 import { HomeSkeleton } from "@/components/HomeSkeleton";
 import {
   Select,
@@ -185,8 +186,8 @@ function lightDeviceStats(data: HAState[], lightEntityId: string, baselines: Rec
   };
 }
 
-function fmtMetric(n: number | null, digits: number, unit: string) {
-  return n == null ? "N/A" : `${n.toFixed(digits)} ${unit}`;
+function fmtMetric(n: number | null, digits: number, unit: string, missing = "N/A") {
+  return n == null ? missing : `${n.toFixed(digits)} ${unit}`;
 }
 
 const THREE_PHASE_METERS = [
@@ -232,6 +233,7 @@ function threePhaseMeterStats(
 }
 
 function Home() {
+  const { t, known, lang } = useI18n();
   const summaryFn = useServerFn(getSummary);
   const statesFn = useServerFn(getStates);
   const callFn = useServerFn(callService);
@@ -353,22 +355,22 @@ function Home() {
   const isLoading = summary.isLoading || states.isLoading;
 
   return (
-    <Shell title="Branch" subtitle="Live devices, occupancy and today’s energy on the floor.">
+    <Shell title={t("navBranch")} subtitle={t("branchSubtitle")}>
       {isLoading ? (
         <HomeSkeleton />
       ) : (
         <>
       {/* KPI row */}
       <section>
-        <SectionHeader title="Live overview" />
+        <SectionHeader title={t("liveOverview")} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard icon={Users} label="In restaurant" value={total} hint={`${s?.counts.zones.length ?? 0} zones`} tone="primary" />
-          <StatCard icon={ArrowUpRight} label="Customer visits" value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
+          <StatCard icon={Users} label={t("inRestaurant")} value={total} hint={t("zonesCount", { count: s?.counts.zones.length ?? 0 })} tone="primary" />
+          <StatCard icon={ArrowUpRight} label={t("customerVisits")} value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
           <StatCard
             icon={Activity}
-            label="Peak hour"
-            value={formatHour12(peak.hour)}
-            hint={`${peak.total} customers`}
+            label={t("peakHour")}
+            value={formatHour12(peak.hour, lang)}
+            hint={t("customersCount", { count: peak.total })}
             tone="accent"
           />
         </div>
@@ -380,7 +382,7 @@ function Home() {
             .map((z) => {
               const count = s.counts.counts[z] ?? 0;
               // friendly label like 'table 1' or 'zone name'
-              const label = z.replace(/_/g, " ");
+              const label = known(z.replace(/_/g, " "));
               const isOccupied = count > 0;
               const bgColor = isOccupied 
                 ? 'bg-green-600 dark:bg-green-700' 
@@ -405,7 +407,7 @@ function Home() {
 
       {/* Climate section */}
       <section className="mt-10">
-        <SectionHeader title="Climate control" hint={`${climates.filter((c) => c.state !== "off").length} of ${climates.length} running`} />
+        <SectionHeader title={t("climateControl")} hint={t("climateRunning", { on: climates.filter((c) => c.state !== "off").length, total: climates.length })} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {climates.map((c) => (
             <ClimateCard
@@ -446,13 +448,13 @@ function Home() {
               }
             />
           ))}
-          {!climates.length && <EmptyCard label="No climate entities" />}
+          {!climates.length && <EmptyCard label={t("noClimate")} />}
         </div>
       </section>
 
       {/* Lighting row */}
       <section className="mt-10">
-        <SectionHeader title="Lighting" />
+        <SectionHeader title={t("lighting")} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {lights.map((l) => {
             const on = l.state === "on";
@@ -476,9 +478,9 @@ function Home() {
                       <Lightbulb className="w-6 h-6" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium truncate">{l.attributes.friendly_name ?? l.entity_id}</div>
+                      <div className="font-medium truncate">{known(l.attributes.friendly_name ?? l.entity_id)}</div>
                       <div className={`text-[11px] ${on ? "text-primary/80" : "text-muted-foreground"}`}>
-                        {on ? "On" : "Off"}
+                        {on ? t("on") : t("off")}
                       </div>
                     </div>
                   </div>
@@ -497,16 +499,16 @@ function Home() {
                   <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
                     {(
                       [
-                        ["Current", fmtMetric(device.current, 2, "A")],
-                        ["Power", fmtMetric(device.power, 2, "W")],
-                        ["Today Energy", fmtMetric(device.energy, 2, "kWh")],
-                        ["Temperature", fmtMetric(device.temperature, 1, "°C")],
-                        ["Voltage", fmtMetric(device.voltage, 2, "V")],
+                        [t("current"), fmtMetric(device.current, 2, "A")],
+                        [t("power"), fmtMetric(device.power, 2, "W")],
+                        [t("todayEnergy"), fmtMetric(device.energy, 2, "kWh")],
+                        [t("temperature"), fmtMetric(device.temperature, 1, "°C")],
+                        [t("voltage"), fmtMetric(device.voltage, 2, "V")],
                       ] as const
                     ).map(([label, value]) => (
                       <div key={label} className="flex justify-between items-center gap-3">
                         <span className="uppercase tracking-wider text-[10px] text-muted-foreground">{label}</span>
-                        <span className={`font-semibold tabular-nums ${on ? "text-primary" : ""}`}>{value}</span>
+                        <span className={`font-semibold tabular-nums ${on ? "text-primary" : ""}`}>{value === "N/A" ? t("na") : value}</span>
                       </div>
                     ))}
                   </div>
@@ -514,36 +516,36 @@ function Home() {
               </div>
             );
           })}
-          {!lights.length && <EmptyCard label="No lights" />}
+          {!lights.length && <EmptyCard label={t("noLights")} />}
         </div>
       </section>
 
       {/* Cameras row (Home Assistant proxy) */}
       <section className="mt-10">
-        <SectionHeader title="Live cameras" hint={`${cameras.length} online`} />
+        <SectionHeader title={t("liveCameras")} hint={t("camerasOnline", { count: cameras.length })} />
         {cameras.length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {cameras.map((c) => (
               <CameraTile
                 key={c.entity_id}
-                name={c.attributes.friendly_name ?? c.entity_id}
+                name={known(c.attributes.friendly_name ?? c.entity_id)}
                 src={`/api/camera/${c.entity_id}?stream=1`}
               />
             ))}
           </div>
         ) : (
-          <EmptyCard label="No camera" />
+          <EmptyCard label={t("noCamera")} />
         )}
       </section>
 
       {/* Energy section */}
       <section className="mt-10">
-        <SectionHeader title="Daily Power / Energy usage" />
+        <SectionHeader title={t("dailyPower")} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Lights Energy */}
           <EnergyMeterCard
-            title="Lights Energy"
-            hint="Today's consumption"
+            title={t("lightsEnergy")}
+            hint={t("todaysConsumption")}
             power={lightsTotalPower}
             energy={lightsTotalEnergy}
             current={lightsTotalCurrent}
@@ -553,8 +555,8 @@ function Home() {
 
           {/* AC Energy */}
           <EnergyMeterCard
-            title="AC Energy"
-            hint="Today's consumption"
+            title={t("acEnergy")}
+            hint={t("todaysConsumption")}
             power={acTotalPower}
             energy={acTotalEnergy}
             current={acTotalCurrent}
@@ -565,8 +567,8 @@ function Home() {
           {THREE_PHASE_METERS.map((meter) => (
             <PhaseMeterCard
               key={meter.prefix}
-              title={meter.title}
-              hint={meter.hint}
+              title={t(meter.title === "Oven Energy" ? "ovenEnergy" : meter.title === "Freezer Energy" ? "freezerEnergy" : "chillerEnergy")}
+              hint={t(meter.hint === "Oven" ? "oven" : meter.hint === "Freezer" ? "freezer" : "chiller")}
                   stats={threePhaseMeterStats(data, meter.prefix, baselines)}
             />
           ))}
@@ -651,10 +653,10 @@ type EnergyCompareLite = {
   changePct: number | null;
 };
 
-function usageChange(compare: EnergyCompareLite) {
+function usageChange(compare: EnergyCompareLite, t: ReturnType<typeof useI18n>["t"]) {
   if (compare.changePct == null || compare.previous == null) {
     return {
-      word: "Need more days",
+      word: t("needMoreDaysWord"),
       tone: "text-muted-foreground",
       Icon: Activity,
       delta: null as number | null,
@@ -662,7 +664,7 @@ function usageChange(compare: EnergyCompareLite) {
   }
   if (compare.changePct > 0) {
     return {
-      word: "Increase",
+      word: t("increase"),
       tone: "text-warning",
       Icon: ArrowUpRight,
       delta: compare.current - compare.previous,
@@ -670,14 +672,14 @@ function usageChange(compare: EnergyCompareLite) {
   }
   if (compare.changePct < 0) {
     return {
-      word: "Reduction",
+      word: t("reduction"),
       tone: "text-success",
       Icon: ArrowDownRight,
       delta: compare.current - compare.previous,
     };
   }
   return {
-    word: "No change",
+    word: t("noChange"),
     tone: "text-muted-foreground",
     Icon: Activity,
     delta: 0,
@@ -693,7 +695,8 @@ function UsageChangeCard({
   vs: string;
   compare: EnergyCompareLite;
 }) {
-  const change = usageChange(compare);
+  const { t } = useI18n();
+  const change = usageChange(compare, t);
   const Icon = change.Icon;
   const pct =
     compare.changePct == null ? null : `${compare.changePct > 0 ? "+" : ""}${compare.changePct.toFixed(0)}%`;
@@ -731,25 +734,26 @@ function HomeEnergySummary({
   };
   isAdmin: boolean;
 }) {
+  const { t, known } = useI18n();
   const latestIsToday = overview.today.dayKey === overview.todayKey;
   return (
     <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-5 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <SectionHeader
-            title={latestIsToday ? "Energy today" : "Latest closed day"}
+            title={latestIsToday ? t("energyToday") : t("latestClosedDay")}
             hint={
               overview.demo
-                ? "Sample summary"
+                ? t("sampleSummary")
                 : latestIsToday
-                  ? "Since 6:00 AM"
+                  ? t("sinceMorning")
                   : overview.today.dayKey
             }
             inline
           />
           <div className="font-display text-5xl tabular-nums text-accent">
             {formatHomeKwh(overview.today.total)}
-            <span className="text-lg text-muted-foreground ml-2">kWh</span>
+            <span className="text-lg text-muted-foreground ms-2">kWh</span>
           </div>
         </div>
         {isAdmin && (
@@ -757,19 +761,19 @@ function HomeEnergySummary({
             to="/reports"
             className="text-xs uppercase tracking-wider text-accent hover:underline shrink-0"
           >
-            View reports →
+            {t("viewReportsArrow")}
           </Link>
         )}
       </div>
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <UsageChangeCard label="Last 7 days" vs="vs previous week" compare={overview.week} />
-        <UsageChangeCard label="This month" vs="vs last month" compare={overview.month} />
+        <UsageChangeCard label={t("last7Days")} vs={t("vsPreviousWeek")} compare={overview.week} />
+        <UsageChangeCard label={t("thisMonth")} vs={t("vsLastMonth")} compare={overview.month} />
       </div>
       <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
         {overview.categories.map((c) => (
           <div key={c.id} className="rounded-xl bg-card border border-border px-3 py-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {REPORT_TABLE_LABELS[c.id]}
+              {known(REPORT_TABLE_LABELS[c.id])}
             </div>
             <div className="font-semibold tabular-nums mt-1">{formatHomeKwh(c.today)} kWh</div>
           </div>
@@ -788,13 +792,14 @@ function PhaseMeterCard({
   hint: string;
   stats: ReturnType<typeof threePhaseMeterStats>;
 }) {
-  const head = "pb-2 text-[10px] uppercase tracking-wider text-muted-foreground text-right";
+  const head = "pb-2 text-[10px] uppercase tracking-wider text-muted-foreground text-end";
   const label = "py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground";
-  const cell = "py-2.5 text-sm tabular-nums text-right font-semibold";
+  const cell = "py-2.5 text-sm tabular-nums text-end font-semibold";
+  const { t } = useI18n();
   const phase = (values: PhaseValues, digits: number, unit: string) =>
     PHASE_LEGS.map((leg) => (
       <div key={leg} className={cell}>
-        {fmtMetric(values[leg], digits, unit)}
+        {fmtMetric(values[leg], digits, unit, t("na"))}
       </div>
     ));
 
@@ -802,24 +807,24 @@ function PhaseMeterCard({
     <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
       <SectionHeader title={title} hint={hint} inline />
       <div className="grid grid-cols-4 gap-x-2 items-baseline">
-        <div className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Phase</div>
+        <div className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground">{t("phase")}</div>
         <div className={head}>A</div>
         <div className={head}>B</div>
         <div className={head}>C</div>
 
-        <div className={label}>Current</div>
+        <div className={label}>{t("current")}</div>
         {phase(stats.current, 2, "A")}
 
-        <div className={label}>Power</div>
+        <div className={label}>{t("power")}</div>
         {phase(stats.power, 2, "W")}
 
-        <div className={label}>Voltage</div>
+        <div className={label}>{t("voltage")}</div>
         {phase(stats.voltage, 2, "V")}
       </div>
 
       <div className="mt-4 pt-4 border-t border-border/50">
         <div className="flex justify-between items-center gap-3 text-xs">
-          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">Today Total Energy</span>
+          <span className="uppercase tracking-wider text-[10px] text-muted-foreground">{t("todayTotalEnergy")}</span>
           <span className="font-semibold tabular-nums text-accent">{fmtMetric(stats.totalEnergy, 2, "kWh")}</span>
         </div>
       </div>
@@ -844,19 +849,20 @@ function EnergyMeterCard({
   voltage: number | null;
   temp?: number | null;
 }) {
+  const { t } = useI18n();
   const showTemp = temp !== undefined;
   return (
     <div className="rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
       <SectionHeader title={title} hint={hint} inline />
       <div className="space-y-4">
         <BigMetric
-          label="Total Power"
+          label={t("totalPower")}
           value={power != null ? Math.max(0, power).toFixed(2) : "0"}
           unit="W"
           tone="primary"
         />
         <BigMetric
-          label="Today Energy"
+          label={t("todayEnergy")}
           value={energy != null ? energy.toFixed(2) : "0"}
           unit="kWh"
           tone="accent"
@@ -864,18 +870,18 @@ function EnergyMeterCard({
         <div className={`grid ${showTemp ? "grid-cols-3" : "grid-cols-2"} gap-3 pt-2 border-t border-border/50`}>
           <MiniStat
             icon={Activity}
-            label="Current"
+            label={t("current")}
             value={current != null ? `${current.toFixed(2)} A` : "—"}
           />
           <MiniStat
             icon={Activity}
-            label="Voltage"
+            label={t("voltage")}
             value={voltage != null ? `${voltage.toFixed(2)} V` : "—"}
           />
           {showTemp && (
             <MiniStat
               icon={Thermometer}
-              label="Temp"
+              label={t("tempShort")}
               value={temp != null ? `${temp.toFixed(1)}°C` : "—"}
             />
           )}
@@ -1012,7 +1018,8 @@ function ClimateCard({
   const modePillOn = "bg-primary text-primary-foreground";
   const hoverTint = "hover:bg-primary/20 hover:text-primary";
 
-  const fmt = (s: string) => s.replace(/_/g, " ");
+  const { t, known } = useI18n();
+  const fmt = (s: string) => known(s.replace(/_/g, " "));
 
   return (
     <div
@@ -1022,9 +1029,9 @@ function ClimateCard({
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className={`text-[10px] uppercase tracking-wider ${active ? "text-primary/80" : "text-muted-foreground"}`}>{mode}</div>
+          <div className={`text-[10px] uppercase tracking-wider ${active ? "text-primary/80" : "text-muted-foreground"}`}>{fmt(mode)}</div>
           <div className="font-display text-lg tracking-wider truncate">
-            {attrs.friendly_name ?? c.entity_id}
+            {known(attrs.friendly_name ?? c.entity_id)}
           </div>
         </div>
         <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${active ? accentBg : "bg-muted text-muted-foreground"}`}>
@@ -1034,10 +1041,10 @@ function ClimateCard({
 
       <div className="mt-4 flex items-center justify-between">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Now</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("now")}</div>
           <div className="font-display text-3xl tabular-nums">{current}°</div>
           {typeof humidity === "number" && (
-            <div className="text-[11px] text-muted-foreground mt-0.5">{humidity}% humidity</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{t("humidity", { value: humidity })}</div>
           )}
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -1045,12 +1052,12 @@ function ClimateCard({
             <button
               onClick={() => adjustTemp(-1)}
               className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-              aria-label="Decrease"
+              aria-label={t("decrease")}
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
             <div className="text-center min-w-[56px]">
-              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Target</div>
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{t("target")}</div>
               <div className={`font-display text-2xl tabular-nums ${active ? accentText : "text-primary"}`}>
                 {localTemp}°
               </div>
@@ -1058,14 +1065,14 @@ function ClimateCard({
             <button
               onClick={() => adjustTemp(1)}
               className={`w-8 h-8 rounded-full bg-muted grid place-items-center ${hoverTint}`}
-              aria-label="Increase"
+              aria-label={t("increaseTemp")}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
           {/* Sync status indicator */}
           {syncing && (
-            <span className="text-[10px] text-muted-foreground animate-pulse">Updating…</span>
+            <span className="text-[10px] text-muted-foreground animate-pulse">{t("updating")}</span>
           )}
         </div>
       </div>
@@ -1096,11 +1103,11 @@ function ClimateCard({
           {fanModes.length > 0 && (
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Wind className="w-3 h-3" /> Fan
+                <Wind className="w-3 h-3" /> {t("fan")}
               </label>
               <Select value={fanMode ?? ""} onValueChange={onFan}>
                 <SelectTrigger className="h-8 text-xs bg-card border-border capitalize">
-                  <SelectValue placeholder="Select" />
+                  <SelectValue placeholder={t("select")} />
                 </SelectTrigger>
                 <SelectContent>
                   {fanModes.map((f) => (
@@ -1116,11 +1123,11 @@ function ClimateCard({
           {swingModes.length > 0 && (
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
-                <Activity className="w-3 h-3" /> Swing
+                <Activity className="w-3 h-3" /> {t("swing")}
               </label>
               <Select value={swingMode ?? ""} onValueChange={onSwing}>
                 <SelectTrigger className="h-8 text-xs bg-card border-border capitalize">
-                  <SelectValue placeholder="Select" />
+                  <SelectValue placeholder={t("select")} />
                 </SelectTrigger>
                 <SelectContent>
                   {swingModes.map((s) => (
@@ -1137,16 +1144,16 @@ function ClimateCard({
 
       <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Current</span>
-          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? "N/A" : `${parseFloat(energy.current).toFixed(2)} A`}</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">{t("current")}</span>
+          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? t("na") : `${parseFloat(energy.current).toFixed(2)} A`}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Power</span>
-          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? "N/A" : `${Math.max(0, parseFloat(energy.power)).toFixed(2)} W`}</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">{t("power")}</span>
+          <span className="font-semibold">{!energy?.power || energy.power === "N/A" ? t("na") : `${Math.max(0, parseFloat(energy.power)).toFixed(2)} W`}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">Today Energy</span>
-          <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? "N/A" : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
+          <span className="uppercase tracking-wider text-muted-foreground text-[10px]">{t("todayEnergy")}</span>
+          <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? t("na") : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
         </div>
       </div>
     </div>
@@ -1154,6 +1161,7 @@ function ClimateCard({
 }
 
 function CameraTile({ name, src }: { name: string; src: string }) {
+  const { t } = useI18n();
   const [full, setFull] = useState(false);
   const [error, setError] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -1221,14 +1229,14 @@ function CameraTile({ name, src }: { name: string; src: string }) {
                 <span
                   className={`w-1.5 h-1.5 rounded-full animate-pulse ${error ? "bg-yellow-500" : "bg-destructive"}`}
                 />
-                {error ? "Connecting…" : "LIVE"}
+                {error ? t("connecting") : t("live")}
               </div>
             </div>
           </div>
           <button
             onClick={() => setFull(true)}
             className="w-9 h-9 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary grid place-items-center transition-colors"
-            aria-label="Fullscreen"
+            aria-label={t("fullscreen")}
           >
             <Maximize2 className="w-4 h-4" />
           </button>
@@ -1237,12 +1245,12 @@ function CameraTile({ name, src }: { name: string; src: string }) {
           type="button"
           onClick={() => setFull(true)}
           className="relative aspect-video bg-black w-full block group"
-          aria-label={`Expand ${name}`}
+          aria-label={t("expandCamera", { name })}
         >
           {error ? (
             <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
               <Video className="w-10 h-10 opacity-30" />
-              <span className="text-xs">Stream unavailable</span>
+              <span className="text-xs">{t("streamUnavailable")}</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -1252,7 +1260,7 @@ function CameraTile({ name, src }: { name: string; src: string }) {
                 }}
                 className="text-xs text-primary underline mt-1"
               >
-                Retry
+                {t("retry")}
               </button>
             </div>
           ) : (
@@ -1284,7 +1292,7 @@ function CameraTile({ name, src }: { name: string; src: string }) {
             <div className="flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
               <span className="font-display text-xl tracking-wider">{name}</span>
-              <span className="text-[11px] uppercase tracking-widest text-white/60">Live</span>
+              <span className="text-[11px] uppercase tracking-widest text-white/60">{t("liveWord")}</span>
             </div>
             <button
               onClick={(e) => {
@@ -1292,7 +1300,7 @@ function CameraTile({ name, src }: { name: string; src: string }) {
                 setFull(false);
               }}
               className="w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 grid place-items-center"
-              aria-label="Close"
+              aria-label={t("close")}
             >
               <X className="w-5 h-5" />
             </button>

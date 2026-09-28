@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Shell } from "@/components/Shell";
-import { PeriodFilter, periodLabel, type PeriodValue } from "@/components/PeriodFilter";
+import { useI18n } from "@/lib/i18n";
+import { PeriodFilter, usePeriodLabel, type PeriodValue } from "@/components/PeriodFilter";
 import { getGateStatus } from "@/lib/gate.functions";
 import { getEnergyBaselines, getEnergyReports } from "@/lib/energy-reports.functions";
 import { getStates, type HAState } from "@/lib/ha.functions";
@@ -63,8 +64,8 @@ function haEnergy(states: HAState[], entityId: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function formatDay(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", {
+function formatDay(iso: string, locale: string) {
+  return new Date(iso).toLocaleDateString(locale, {
     timeZone: "Asia/Riyadh",
     year: "numeric",
     month: "short",
@@ -72,11 +73,11 @@ function formatDay(iso: string) {
   });
 }
 
-function formatKwh(n: number) {
+function formatKwh(n: number, locale: string) {
   if (Math.abs(n) >= 1000) {
-    return `${(n / 1000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MWh`;
+    return `${(n / 1000).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MWh`;
   }
-  return `${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`;
+  return `${n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh`;
 }
 
 /** Sum of stored daily consumption for the current filters. */
@@ -85,6 +86,8 @@ function filteredTotalEnergy(rows: EnergyReportRow[]) {
 }
 
 function ReportsPage() {
+  const { t, locale, known } = useI18n();
+  const periodText = usePeriodLabel();
   const [table, setTable] = useState<ReportTable>("lights");
   const [deviceId, setDeviceId] = useState("all");
   const [period, setPeriod] = useState<PeriodValue>({ start: "", end: "" });
@@ -168,9 +171,9 @@ function ReportsPage() {
   );
   const periodEnergy = useMemo(() => filteredTotalEnergy(filtered), [filtered]);
   const selectedDevice = devices.find((d) => d.entityId === deviceId)?.name;
-  const rangeHint = periodLabel(period);
+  const rangeHint = periodText(period);
   const hasPeriod = Boolean(period.start || period.end);
-  const scopeHint = `${REPORT_TABLE_LABELS[table]}${deviceId !== "all" && selectedDevice ? ` · ${selectedDevice}` : " · All devices"}`;
+  const scopeHint = `${known(REPORT_TABLE_LABELS[table])}${deviceId !== "all" && selectedDevice ? ` · ${known(selectedDevice)}` : ` · ${t("allDevices")}`}`;
 
   useEffect(() => {
     setPage(1);
@@ -193,12 +196,12 @@ function ReportsPage() {
   };
 
   return (
-    <Shell title="Reports" subtitle="Closed 6:00 AM days plus today’s live consumption from each device, the same numbers as Branch.">
+    <Shell title={t("navReports")} subtitle={t("reportsSubtitle")}>
       <Tabs value={table} onValueChange={(v) => changeTable(v as ReportTable)}>
         <TabsList className="h-auto flex-wrap bg-card/70 border border-border p-1">
           {REPORT_TABLES.map((id) => (
             <TabsTrigger key={id} value={id} className="uppercase tracking-wider text-xs px-4">
-              {REPORT_TABLE_LABELS[id]}
+              {known(REPORT_TABLE_LABELS[id])}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -206,28 +209,28 @@ function ReportsPage() {
 
       <div className="mt-6 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
         <div className="flex flex-col xl:flex-row xl:items-start gap-5">
-          <Field label="Device">
+          <Field label={t("device")}>
             <Select value={deviceId} onValueChange={setDeviceId}>
               <SelectTrigger className="bg-input border-border text-foreground w-full sm:w-64 [&_svg]:text-foreground [&_svg]:opacity-100">
-                <SelectValue placeholder="All devices" />
+                <SelectValue placeholder={t("allDevices")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All devices</SelectItem>
+                <SelectItem value="all">{t("allDevices")}</SelectItem>
                 {devices.map((d) => (
                   <SelectItem key={d.entityId} value={d.entityId}>
-                    {d.name}
+                    {known(d.name)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
           <div className="flex-1 space-y-1.5 min-w-0">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Period</Label>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("period")}</Label>
             <PeriodFilter value={period} onChange={setPeriod} months={months} />
           </div>
           <div className="flex xl:flex-col justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
-              Reset
+              {t("reset")}
             </Button>
           </div>
         </div>
@@ -236,24 +239,24 @@ function ReportsPage() {
       <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
         <div className="flex items-center gap-2 mb-4">
           <Zap className="w-4 h-4 text-accent" />
-          <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Total Consumption</span>
+          <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{t("totalConsumption")}</span>
         </div>
         <p className="text-xs text-muted-foreground mb-4">{scopeHint}</p>
         <div className={`grid gap-4 ${hasPeriod ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
           {hasPeriod && (
             <div className="rounded-xl border border-border/60 bg-background/30 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">In this period</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("inThisPeriod")}</p>
               <p className="text-xs text-muted-foreground mt-1">{rangeHint}</p>
               <p className="font-display text-3xl tabular-nums text-foreground mt-2">
-                {reports.isLoading ? "…" : formatKwh(periodEnergy)}
+                {reports.isLoading ? "…" : formatKwh(periodEnergy, locale)}
               </p>
             </div>
           )}
           <div className="rounded-xl border border-border/60 bg-background/30 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">All time</p>
-            <p className="text-xs text-muted-foreground mt-1">{REPORT_TABLE_LABELS[table]} · every stored day</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("allTime")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("everyStoredDay", { load: known(REPORT_TABLE_LABELS[table]) })}</p>
             <p className="font-display text-3xl tabular-nums text-accent mt-2">
-              {reports.isLoading ? "…" : formatKwh(totalEnergy)}
+              {reports.isLoading ? "…" : formatKwh(totalEnergy, locale)}
             </p>
           </div>
         </div>
@@ -262,15 +265,15 @@ function ReportsPage() {
       <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft overflow-hidden">
         <div className="px-5 py-4 border-b border-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <h2 className="font-display text-xl tracking-wider">{REPORT_TABLE_LABELS[table]}</h2>
+            <h2 className="font-display text-xl tracking-wider">{known(REPORT_TABLE_LABELS[table])}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {filtered.length} reading{filtered.length === 1 ? "" : "s"}
-              {deviceId !== "all" ? ` · ${devices.find((d) => d.entityId === deviceId)?.name}` : ""}
+              {filtered.length === 1 ? t("readingsOne", { count: filtered.length }) : t("readingsMany", { count: filtered.length })}
+              {deviceId !== "all" ? ` · ${known(devices.find((d) => d.entityId === deviceId)?.name ?? "")}` : ""}
               {hasPeriod ? ` · ${rangeHint}` : ""}
             </p>
             {liveRows.some((r) => r.stale) && includeLive && (
               <p className="text-xs text-amber-400 mt-1">
-                These kWh meters have not reported since before 6:00 AM, so today so far stays 0.00 until Home Assistant gets a new total. AC meters usually update continuously.
+                {t("staleMeters")}
               </p>
             )}
           </div>
@@ -278,23 +281,23 @@ function ReportsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="px-5">Device name</TableHead>
-              <TableHead className="px-5">Consumption</TableHead>
-              <TableHead className="px-5">Day</TableHead>
+              <TableHead className="px-5">{t("deviceName")}</TableHead>
+              <TableHead className="px-5">{t("consumption")}</TableHead>
+              <TableHead className="px-5">{t("day")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {reports.isLoading && (
               <TableRow>
                 <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
-                  Loading…
+                  {t("loading")}
                 </TableCell>
               </TableRow>
             )}
             {reports.isError && (
               <TableRow>
                 <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
-                  Could not load reports. Refresh the page.
+                  {t("reportsError")}
                 </TableCell>
               </TableRow>
             )}
@@ -302,23 +305,23 @@ function ReportsPage() {
               <TableRow>
                 <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
                   {rows.length === 0 && liveRows.length === 0
-                    ? "No closed days yet. Today’s live consumption appears here once Home Assistant is reachable."
-                    : "No readings match these filters. Clear or widen the date range."}
+                    ? t("noClosedDays")
+                    : t("noReadings")}
                 </TableCell>
               </TableRow>
             )}
             {pageRows.map((row: ReportRow) => (
               <TableRow key={`${row.live ? "live" : row.dayKey}-${row.entityId}`}>
-                <TableCell className="px-5 font-medium">{row.deviceName}</TableCell>
+                <TableCell className="px-5 font-medium">{known(row.deviceName)}</TableCell>
                 <TableCell className="px-5 tabular-nums font-semibold">
                   {row.consumption == null ? "—" : `${row.consumption.toFixed(2)} kWh`}
                 </TableCell>
                 <TableCell className="px-5 text-muted-foreground tabular-nums">
                   {row.live
                     ? row.stale
-                      ? `${formatDay(row.day)} · meter last updated`
-                      : `${formatDay(row.day)} · so far`
-                    : formatDay(row.day)}
+                      ? t("meterLastUpdated", { day: formatDay(row.day, locale) })
+                      : t("soFar", { day: formatDay(row.day, locale) })
+                    : formatDay(row.day, locale)}
                 </TableCell>
               </TableRow>
             ))}
@@ -326,8 +329,8 @@ function ReportsPage() {
           {!reports.isLoading && filtered.length > 0 && (
             <TableFooter>
               <TableRow className="hover:bg-transparent">
-                <TableCell className="px-5">Total consumption</TableCell>
-                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(periodEnergy)}</TableCell>
+                <TableCell className="px-5">{t("totalConsumptionRow")}</TableCell>
+                <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(periodEnergy, locale)}</TableCell>
                 <TableCell className="px-5 text-muted-foreground">{rangeHint}</TableCell>
               </TableRow>
             </TableFooter>
@@ -336,7 +339,7 @@ function ReportsPage() {
 
         <div className="px-5 py-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            {filtered.length === 0 ? "No rows" : `Showing ${from}–${to} of ${filtered.length}`}
+            {filtered.length === 0 ? t("noRows") : t("showingRows", { from, to, total: filtered.length })}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -347,11 +350,11 @@ function ReportsPage() {
               disabled={safePage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
+              <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+              {t("previous")}
             </Button>
             <span className="text-xs tabular-nums text-muted-foreground min-w-[7rem] text-center">
-              Page {safePage} of {pageCount}
+              {t("pageOf", { page: safePage, pages: pageCount })}
             </span>
             <Button
               type="button"
@@ -361,8 +364,8 @@ function ReportsPage() {
               disabled={safePage >= pageCount}
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             >
-              Next
-              <ChevronRight className="w-4 h-4" />
+              {t("next")}
+              <ChevronRight className="w-4 h-4 rtl:rotate-180" />
             </Button>
           </div>
         </div>

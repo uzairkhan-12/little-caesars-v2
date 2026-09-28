@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { format, parse } from "date-fns";
+import { format, parse, type Locale } from "date-fns";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -16,6 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { Shell } from "@/components/Shell";
+import { useI18n, type TFunction } from "@/lib/i18n";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { ChainKpiGrid, BranchesBoard, type ChainRange } from "@/components/ChainBoard";
 import { getGateStatus } from "@/lib/gate.functions";
@@ -55,26 +56,31 @@ function formatVisits(n: number) {
   return n.toLocaleString("en-US");
 }
 
-function monthLong(dayKey: string) {
-  return format(parse(dayKey, "yyyy-MM-dd", new Date()), "MMMM");
+function monthLong(dayKey: string, dateLocale: Locale) {
+  return format(parse(dayKey, "yyyy-MM-dd", new Date()), "MMMM", { locale: dateLocale });
 }
 
-const COMPARE_CHART: ChartConfig = {
-  current: { label: "This period", color: "#5eead4" },
-  previous: { label: "Last month", color: "#38bdf8" },
-  year: { label: "Last year", color: "#64748b" },
-};
+function compareChart(t: TFunction): ChartConfig {
+  return {
+    current: { label: t("thisPeriod"), color: "#5eead4" },
+    previous: { label: t("lastMonth"), color: "#38bdf8" },
+    year: { label: t("lastYear"), color: "#64748b" },
+  };
+}
 
-const LOAD_CHART: ChartConfig = {
-  ac: { label: "AC", color: "#5eead4" },
-  oven: { label: "Oven", color: "#f5a524" },
-  freezer: { label: "Freezer", color: "#34d399" },
-  chiller: { label: "Chiller", color: "#38bdf8" },
-  lights: { label: "Lights", color: "#5eb3ff" },
-  prevYear: { label: "Previous year", color: "#94a3b8" },
-};
+function loadChart(t: TFunction, known: (text: string) => string): ChartConfig {
+  return {
+    ac: { label: known("AC"), color: "#5eead4" },
+    oven: { label: known("Oven"), color: "#f5a524" },
+    freezer: { label: known("Freezer"), color: "#34d399" },
+    chiller: { label: known("Chiller"), color: "#38bdf8" },
+    lights: { label: known("Lights"), color: "#5eb3ff" },
+    prevYear: { label: t("previousYear"), color: "#94a3b8" },
+  };
+}
 
 function OverviewPage() {
+  const { t, locale, known } = useI18n();
   const [range, setRange] = useState<Range>("today");
   const [now, setNow] = useState(() => new Date());
   const overviewFn = useServerFn(getEnergyOverview);
@@ -108,7 +114,7 @@ function OverviewPage() {
     return () => window.clearInterval(t);
   }, []);
 
-  const clock = new Intl.DateTimeFormat("en-GB", {
+  const clock = new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Riyadh",
     weekday: "long",
     day: "numeric",
@@ -122,8 +128,8 @@ function OverviewPage() {
   const e = energy.data;
   const v = visitors.data;
   const alerts = useMemo(
-    () => buildAlerts(states.data ?? [], e?.closedThrough ?? null, v?.occupancy ?? 0, v?.occupiedTables ?? 0),
-    [states.data, e?.closedThrough, v?.occupancy, v?.occupiedTables],
+    () => buildAlerts(states.data ?? [], e?.closedThrough ?? null, v?.occupancy ?? 0, v?.occupiedTables ?? 0, t, known),
+    [states.data, e?.closedThrough, v?.occupancy, v?.occupiedTables, t, known],
   );
   const liveTodayKwh = useMemo(
     () => liveTodayEnergy(states.data ?? [], baselines.data ?? {}),
@@ -134,20 +140,20 @@ function OverviewPage() {
     <Shell>
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · Al Mughrizat, Riyadh</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{clock} · {t("location")}</p>
           <h1 className="font-display text-4xl lg:text-[56px] tracking-tight mt-2 font-medium">
-            Chain <span className="font-normal text-muted-foreground">overview</span>
+            {t("chain")} <span className="font-normal text-muted-foreground">{t("overviewWord")}</span>
           </h1>
         </div>
         <div className="flex flex-wrap gap-1 rounded-full bg-card/70 border border-border p-1">
           {(
             [
-              ["today", "Today"],
-              ["yesterday", "Yesterday"],
-              ["week", "This week"],
-              ["mtd", "Month to date"],
-              ["quarter", "Quarter"],
-              ["year", "Year"],
+              ["today", t("rangeToday")],
+              ["yesterday", t("rangeYesterday")],
+              ["week", t("rangeWeek")],
+              ["mtd", t("rangeMtd")],
+              ["quarter", t("rangeQuarter")],
+              ["year", t("rangeYear")],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -179,7 +185,7 @@ function OverviewPage() {
                   occupied ? "bg-green-600 dark:bg-green-700 text-white" : "bg-muted text-muted-foreground"
                 }`}
               >
-                <span className="text-xs font-medium capitalize">{z.name.replace(/_/g, " ")}</span>
+                <span className="text-xs font-medium capitalize">{known(z.name.replace(/_/g, " "))}</span>
               </div>
             );
           })}
@@ -187,7 +193,7 @@ function OverviewPage() {
       )}
 
       {(energy.isLoading || visitors.isLoading) && !e && (
-        <p className="text-sm text-muted-foreground mt-6">Loading overview…</p>
+        <p className="text-sm text-muted-foreground mt-6">{t("loadingOverview")}</p>
       )}
 
       {e && (
@@ -317,33 +323,38 @@ const EMPTY_VISITORS: VisitorData = {
 };
 
 function EnergyAngleSection({ energy }: { energy: EnergyData }) {
+  const { t, dateLocale, known } = useI18n();
   const loadRows = energy.load.map((row) => ({
-    name: REPORT_TABLE_LABELS[row.id],
+    name: known(REPORT_TABLE_LABELS[row.id]),
     current: row.current,
     previous: row.previous,
     year: row.year,
   }));
-  const month = monthLong(energy.todayKey);
+  const month = monthLong(energy.todayKey, dateLocale);
+  const yearMonths = energy.yearMonths.map((row) => ({
+    ...row,
+    label: format(parse(`${row.month}-01`, "yyyy-MM-dd", new Date()), "MMM", { locale: dateLocale }),
+  }));
 
   return (
     <section className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Angle 1</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("angle1")}</p>
           <h2 className="font-display text-3xl tracking-tight font-medium">
-            Energy <span className="text-accent font-normal">saving</span>
+            {t("energy")} <span className="text-accent font-normal">{t("saving")}</span>
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">What we spent, what we saved, where the waste is</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("energySavingHint")}</p>
         </div>
         <Link to="/reports" className="h-10 px-5 rounded-full border border-accent/60 text-accent text-sm inline-flex items-center gap-1 hover:bg-card/70">
-          View reports <ArrowRight className="w-4 h-4" />
+          {t("viewReports")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
         </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <Panel title="This month vs last month vs last year" hint="Cumulative energy (kWh), compared on the same days.">
+        <Panel title={t("monthCompareTitle")} hint={t("monthCompareHint")}>
           {energy.cumulative.length ? (
-            <ChartContainer config={COMPARE_CHART} className="aspect-auto h-64">
+            <ChartContainer config={compareChart(t)} className="aspect-auto h-64">
               <AreaChart data={energy.cumulative} margin={{ left: 4, right: 8, top: 8 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
@@ -359,8 +370,8 @@ function EnergyAngleSection({ energy }: { energy: EnergyData }) {
             <EmptyChart />
           )}
         </Panel>
-        <Panel title="Where the change came from" hint="Energy by load, month to date (kWh).">
-          <ChartContainer config={COMPARE_CHART} className="aspect-auto h-64">
+        <Panel title={t("changeSourceTitle")} hint={t("changeSourceHint")}>
+          <ChartContainer config={compareChart(t)} className="aspect-auto h-64">
             <BarChart data={loadRows} margin={{ left: 4, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
@@ -376,9 +387,9 @@ function EnergyAngleSection({ energy }: { energy: EnergyData }) {
       </div>
 
       <div className="mt-4 flex-1 flex">
-        <Panel className="w-full h-full" title="12 month trend vs previous year" hint={`${month} is month to date.`}>
-          <ChartContainer config={LOAD_CHART} className="aspect-auto h-72">
-            <ComposedChart data={energy.yearMonths} margin={{ left: 4, right: 8, top: 8 }}>
+        <Panel className="w-full h-full" title={t("yearTrendTitle")} hint={t("yearTrendHint", { month })}>
+          <ChartContainer config={loadChart(t, known)} className="aspect-auto h-72">
+            <ComposedChart data={yearMonths} margin={{ left: 4, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatKwh(Number(v))} />
@@ -405,37 +416,39 @@ const CAT_COLOR: Record<ReportTable, string> = {
 };
 
 function EnergyDetailSection({ energy }: { energy: EnergyData }) {
+  const { t, known } = useI18n();
   return (
     <section className="mt-12 mb-8">
       <div className="mb-5">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Energy by load</p>
-        <h2 className="font-display text-3xl tracking-tight font-medium mt-1">Closed days</h2>
-        <p className="text-sm text-muted-foreground mt-1">Last closed 6:00 AM day, week, and the last 14 days.</p>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("energyByLoad")}</p>
+        <h2 className="font-display text-3xl tracking-tight font-medium mt-1">{t("closedDays")}</h2>
+        <p className="text-sm text-muted-foreground mt-1">{t("closedDaysHint")}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {energy.categories.map((c) => (
           <div key={c.id} className="rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
-            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{REPORT_TABLE_LABELS[c.id]}</div>
+            <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{known(REPORT_TABLE_LABELS[c.id])}</div>
             <div className="font-display text-3xl tabular-nums mt-2">{formatKwh(c.today, 1)}</div>
-            <div className="text-xs text-muted-foreground mt-1">kWh last closed day</div>
+            <div className="text-xs text-muted-foreground mt-1">{t("kwhLastClosed")}</div>
             <div className="mt-3 text-xs text-muted-foreground">
-              7 days {formatKwh(c.week, 0)}
-              {c.lastWeek > 0 ? ` · prev ${formatKwh(c.lastWeek, 0)}` : ""}
+              {c.lastWeek > 0
+                ? t("sevenDaysPrev", { value: formatKwh(c.week, 0), prev: formatKwh(c.lastWeek, 0) })
+                : t("sevenDays", { value: formatKwh(c.week, 0) })}
             </div>
           </div>
         ))}
       </div>
       <div className="mt-4 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
-          <h3 className="font-display text-2xl tracking-tight">Last 14 days</h3>
-          <p className="text-xs text-muted-foreground">Closed 6:00 AM days by load.</p>
+          <h3 className="font-display text-2xl tracking-tight">{t("last14")}</h3>
+          <p className="text-xs text-muted-foreground">{t("last14Hint")}</p>
         </div>
         <Last14DaysChart days={energy.days} />
         <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
           {REPORT_TABLES.map((id) => (
             <span key={id} className="flex items-center gap-1.5">
               <span className={`w-2.5 h-2.5 rounded-sm ${CAT_COLOR[id]}`} />
-              {REPORT_TABLE_LABELS[id]}
+              {known(REPORT_TABLE_LABELS[id])}
             </span>
           ))}
         </div>
@@ -449,11 +462,12 @@ function Last14DaysChart({
 }: {
   days: EnergyData["days"];
 }) {
+  const { t } = useI18n();
   const max = Math.max(1, ...days.map((d) => d.total));
   if (!days.some((d) => d.total > 0)) {
     return (
       <div className="h-56 grid place-items-center text-xs text-muted-foreground">
-        No daily consumption yet. After 6:00 AM snapshots, bars appear here.
+        {t("noDailyYet")}
       </div>
     );
   }
@@ -490,33 +504,32 @@ function Last14DaysChart({
 }
 
 function BusinessAngle({ visitors }: { visitors: VisitorData }) {
+  const { t, known } = useI18n();
+  const dayparts = visitors.dayparts.map((d) => ({ ...d, name: known(d.name) }));
   return (
     <section className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">Angle 2</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("angle2")}</p>
           <h2 className="font-display text-3xl tracking-tight font-medium">
-            Business <span className="text-accent font-normal">insights</span>
+            {t("business")} <span className="text-accent font-normal">{t("insights")}</span>
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">Who came, when, and how this branch compares</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("businessHint")}</p>
         </div>
         <Link to="/statistics" className="h-10 px-5 rounded-full border border-accent/60 text-accent text-sm inline-flex items-center gap-1 hover:bg-card/70">
-          View business details <ArrowRight className="w-4 h-4" />
+          {t("viewBusiness")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
         </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <Panel
-          title="This month vs last month"
-          hint="Customers entered each day, same count as Statistics. Day 1 this month vs day 1 last month, and so on."
-        >
+        <Panel title={t("visitsMonthTitle")} hint={t("visitsMonthHint")}>
           {visitors.cumulative.length ? (
-            <ChartContainer config={COMPARE_CHART} className="aspect-auto h-64">
+            <ChartContainer config={compareChart(t)} className="aspect-auto h-64">
               <BarChart data={visitors.cumulative} margin={{ left: 4, right: 8, top: 8 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} />
                 <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatVisits(Number(v))} />
-                <ChartTooltip content={<ChartTooltipContent labelFormatter={(_v, p) => `Day ${p?.[0]?.payload?.day ?? ""}`} />} />
+                <ChartTooltip content={<ChartTooltipContent labelFormatter={(_v, p) => t("dayLabel", { day: p?.[0]?.payload?.day ?? "" })} />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Bar dataKey="previous" fill="var(--color-previous)" radius={3} maxBarSize={10} />
                 <Bar dataKey="current" fill="var(--color-current)" radius={3} maxBarSize={10} />
@@ -526,9 +539,9 @@ function BusinessAngle({ visitors }: { visitors: VisitorData }) {
             <EmptyChart />
           )}
         </Panel>
-        <Panel title="Customer visits by daypart" hint="Typical mix from the last 4 weeks, scaled to this month.">
-          <ChartContainer config={{ current: { label: "Customer visits", color: "#5eb3ff" } }} className="aspect-auto h-64">
-            <BarChart data={visitors.dayparts} margin={{ left: 4, right: 8, top: 8 }}>
+        <Panel title={t("daypartTitle")} hint={t("daypartHint")}>
+          <ChartContainer config={{ current: { label: t("customerVisits"), color: "#5eb3ff" } }} className="aspect-auto h-64">
+            <BarChart data={dayparts} margin={{ left: 4, right: 8, top: 8 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatVisits(Number(v))} />
@@ -540,12 +553,12 @@ function BusinessAngle({ visitors }: { visitors: VisitorData }) {
       </div>
 
       <div className="mt-4 flex-1 flex">
-        <Panel className="w-full h-full" title="When customers come" hint="Average customer visits by weekday and hour, last 4 weeks.">
+        <Panel className="w-full h-full" title={t("whenCustomers")} hint={t("whenCustomersHint")}>
           <div className="h-72 flex flex-col justify-center">
-            <Heatmap rows={visitors.heatmap} />
+            <Heatmap rows={visitors.heatmap.map((row) => ({ ...row, name: known(row.name) }))} />
             <p className="text-xs text-muted-foreground mt-3">
-              {visitors.busiest ? `Busiest: ${visitors.busiest}` : ""}
-              {visitors.quietest ? ` · Quietest: ${visitors.quietest}` : ""}
+              {visitors.busiest ? t("busiestLine", { value: known(visitors.busiest) }) : ""}
+              {visitors.quietest ? ` · ${t("quietestLine", { value: known(visitors.quietest) })}` : ""}
             </p>
           </div>
         </Panel>
@@ -555,6 +568,7 @@ function BusinessAngle({ visitors }: { visitors: VisitorData }) {
 }
 
 function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
+  const { lang } = useI18n();
   const hours = [10, 13, 16, 19, 22];
   const max = Math.max(1, ...rows.flatMap((r) => r.hours));
   return (
@@ -564,7 +578,7 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
           <div />
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} className="text-center">
-              {hours.includes(h) ? `${((h + 11) % 12) + 1}${h >= 12 ? "p" : "a"}` : ""}
+              {hours.includes(h) ? `${((h + 11) % 12) + 1}${lang === "ar" ? (h >= 12 ? "م" : "ص") : h >= 12 ? "p" : "a"}` : ""}
             </div>
           ))}
         </div>
@@ -592,16 +606,17 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
 }
 
 function AlertsCard({ alerts }: { alerts: Array<{ tone: "ok" | "warn" | "bad"; title: string; detail: string }> }) {
+  const { t } = useI18n();
   return (
     <div id="attention">
       <div className="flex items-center gap-3 mb-3">
-        <h2 className="font-display text-xl tracking-tight font-medium">Needs attention</h2>
+        <h2 className="font-display text-xl tracking-tight font-medium">{t("needsAttention")}</h2>
         <span className="text-xs text-muted-foreground">
-          Exceptions only · {alerts.length} open · this branch
+          {t("exceptionsLine", { count: alerts.length })}
         </span>
       </div>
       {alerts.length === 0 ? (
-        <p className="text-sm text-success">No open exceptions right now.</p>
+        <p className="text-sm text-success">{t("noExceptions")}</p>
       ) : (
         <div className="flex flex-col sm:flex-row gap-3">
           {alerts.map((a) => (
@@ -646,27 +661,34 @@ function liveTodayEnergy(states: HAState[], baselines: Record<string, number>) {
   return any ? sum : 0;
 }
 
-function buildAlerts(states: HAState[], closedThrough: string | null, occupancy: number, occupiedTables: number) {
+function buildAlerts(
+  states: HAState[],
+  closedThrough: string | null,
+  occupancy: number,
+  occupiedTables: number,
+  t: TFunction,
+  known: (text: string) => string,
+) {
   const out: Array<{ tone: "ok" | "warn" | "bad"; title: string; detail: string }> = [];
   const climates = states.filter((s) => s.entity_id.startsWith("climate."));
   for (const c of climates) {
     const cur = Number(c.attributes?.current_temperature);
     const tgt = Number(c.attributes?.temperature);
     if (Number.isFinite(cur) && Number.isFinite(tgt) && cur - tgt >= 6 && c.state !== "off") {
-      const name = String(c.attributes?.friendly_name ?? c.entity_id).replace(/_/g, " ");
+      const name = known(String(c.attributes?.friendly_name ?? c.entity_id).replace(/_/g, " "));
       out.push({
         tone: "bad",
-        title: "Cooling",
-        detail: `${name} ${cur.toFixed(1)}° vs ${tgt.toFixed(0)}° target`,
+        title: t("alertCooling"),
+        detail: t("coolingDetail", { name, cur: cur.toFixed(1), tgt: tgt.toFixed(0) }),
       });
     }
   }
   const acPower = haNum(states, "sensor.ac_energy_monitor_energy1_power") ?? haNum(states, "sensor.ac_energy_monitor_energy1_energy_total");
   if (occupiedTables === 0 && occupancy === 0 && acPower != null && acPower > 80) {
-    out.push({ tone: "warn", title: "Waste", detail: "AC is drawing power with no tables occupied" });
+    out.push({ tone: "warn", title: t("alertWaste"), detail: t("wasteDetail") });
   }
   if (!closedThrough) {
-    out.push({ tone: "warn", title: "Data", detail: "Daily energy close has not written any rows yet" });
+    out.push({ tone: "warn", title: t("alertData"), detail: t("dataDetail") });
   }
   const voltages = [
     "sensor.smart_circuit_breaker_counter_lights_voltage",
@@ -681,8 +703,8 @@ function buildAlerts(states: HAState[], closedThrough: string | null, occupancy:
     if (max - min >= 40) {
       out.push({
         tone: "warn",
-        title: "Power",
-        detail: `Light circuits ${min.toFixed(0)}–${max.toFixed(0)} V`,
+        title: t("alertPower"),
+        detail: t("powerDetail", { min: min.toFixed(0), max: max.toFixed(0) }),
       });
     }
   }
@@ -700,5 +722,6 @@ function Panel({ title, hint, children, className }: { title: string; hint: stri
 }
 
 function EmptyChart() {
-  return <div className="h-64 grid place-items-center text-xs text-muted-foreground">No data in this range yet.</div>;
+  const { t } = useI18n();
+  return <div className="h-64 grid place-items-center text-xs text-muted-foreground">{t("noDataRange")}</div>;
 }

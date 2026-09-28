@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { type DateRange } from "react-day-picker";
-import { endOfMonth, format, parse, startOfMonth, startOfYear, subDays, subMonths } from "date-fns";
+import { endOfMonth, format, parse, startOfMonth, startOfYear, subDays, subMonths, type Locale } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useI18n, type MessageKey, type TFunction } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export type PeriodValue = {
@@ -45,28 +46,38 @@ function isSameMonthRange(start: string, end: string) {
   return Boolean(start && end && start.slice(0, 7) === end.slice(0, 7) && start.endsWith("-01") && end === monthLastKey(start.slice(0, 7)));
 }
 
-function formatMonthLabel(month: string) {
-  return format(parse(`${month}-01`, "yyyy-MM-dd", new Date()), "MMMM yyyy");
+function formatMonthLabel(month: string, dateLocale: Locale) {
+  return format(parse(`${month}-01`, "yyyy-MM-dd", new Date()), "MMMM yyyy", { locale: dateLocale });
 }
 
-function formatRangeLabel(start: string, end: string) {
-  if (!start && !end) return "All time";
-  if (start && end && start === end) return format(fromKey(start), "d MMM yyyy");
-  if (isSameMonthRange(start, end)) return formatMonthLabel(start.slice(0, 7));
-  if (start && end) return `${format(fromKey(start), "d MMM yyyy")} – ${format(fromKey(end), "d MMM yyyy")}`;
-  if (start) return `From ${format(fromKey(start), "d MMM yyyy")}`;
-  return `Until ${format(fromKey(end), "d MMM yyyy")}`;
+function formatRangeLabel(start: string, end: string, t: TFunction, dateLocale: Locale) {
+  const day = (key: string) => format(fromKey(key), "d MMM yyyy", { locale: dateLocale });
+  if (!start && !end) return t("presetAll");
+  if (start && end && start === end) return day(start);
+  if (isSameMonthRange(start, end)) return formatMonthLabel(start.slice(0, 7), dateLocale);
+  if (start && end) return `${day(start)} – ${day(end)}`;
+  if (start) return t("fromDate", { date: day(start) });
+  return t("untilDate", { date: day(end) });
 }
 
-function presetsFor(today: Date): Array<{ id: string; label: string; start: string; end: string }> {
+const PRESET_KEYS: Record<string, MessageKey> = {
+  all: "presetAll",
+  today: "presetToday",
+  "7d": "preset7d",
+  "this-month": "presetThisMonth",
+  "last-month": "presetLastMonth",
+  year: "presetYear",
+};
+
+function presetsFor(today: Date): Array<{ id: string; start: string; end: string }> {
   const todayKey = toKey(today);
   return [
-    { id: "all", label: "All time", start: "", end: "" },
-    { id: "today", label: "Today", start: todayKey, end: todayKey },
-    { id: "7d", label: "Last 7 days", start: toKey(subDays(today, 6)), end: todayKey },
-    { id: "this-month", label: "This month", start: toKey(startOfMonth(today)), end: todayKey },
-    { id: "last-month", label: "Last month", start: toKey(startOfMonth(subMonths(today, 1))), end: toKey(endOfMonth(subMonths(today, 1))) },
-    { id: "year", label: "This year", start: toKey(startOfYear(today)), end: todayKey },
+    { id: "all", start: "", end: "" },
+    { id: "today", start: todayKey, end: todayKey },
+    { id: "7d", start: toKey(subDays(today, 6)), end: todayKey },
+    { id: "this-month", start: toKey(startOfMonth(today)), end: todayKey },
+    { id: "last-month", start: toKey(startOfMonth(subMonths(today, 1))), end: toKey(endOfMonth(subMonths(today, 1))) },
+    { id: "year", start: toKey(startOfYear(today)), end: todayKey },
   ];
 }
 
@@ -75,8 +86,9 @@ function activePresetId(value: PeriodValue, today: Date) {
   return list.find((p) => p.start === value.start && p.end === value.end)?.id ?? (value.start || value.end ? "custom" : "all");
 }
 
-export function periodLabel(value: PeriodValue) {
-  return formatRangeLabel(value.start, value.end);
+export function usePeriodLabel() {
+  const { t, dateLocale } = useI18n();
+  return (value: PeriodValue) => formatRangeLabel(value.start, value.end, t, dateLocale);
 }
 
 export function PeriodFilter({
@@ -88,6 +100,7 @@ export function PeriodFilter({
   onChange: (next: PeriodValue) => void;
   months: string[];
 }) {
+  const { t, dateLocale } = useI18n();
   const today = useMemo(() => riyadhToday(), []);
   const presetId = activePresetId(value, today);
   const presets = useMemo(() => presetsFor(today), [today]);
@@ -142,7 +155,7 @@ export function PeriodFilter({
               setDraftRange(p.start && p.end ? { from: fromKey(p.start), to: fromKey(p.end) } : undefined);
             }}
           >
-            {p.label}
+            {t(PRESET_KEYS[p.id] ?? "presetAll")}
           </Button>
         ))}
       </div>
@@ -164,7 +177,7 @@ export function PeriodFilter({
                 selectedMonth ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              <span className="truncate">{selectedMonth ? formatMonthLabel(selectedMonth) : "Specific month"}</span>
+              <span className="truncate">{selectedMonth ? formatMonthLabel(selectedMonth, dateLocale) : t("specificMonth")}</span>
               <CalendarIcon className="h-4 w-4 shrink-0 text-foreground opacity-100" />
             </Button>
           </PopoverTrigger>
@@ -178,7 +191,7 @@ export function PeriodFilter({
                 disabled={years.length > 0 && monthYear <= years[0]}
                 onClick={() => setMonthYear((y) => y - 1)}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
               </Button>
               <span className="font-display text-xl tracking-wider">{monthYear}</span>
               <Button
@@ -189,7 +202,7 @@ export function PeriodFilter({
                 disabled={years.length > 0 && monthYear >= years[years.length - 1]}
                 onClick={() => setMonthYear((y) => y + 1)}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4 rtl:rotate-180" />
               </Button>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -207,7 +220,7 @@ export function PeriodFilter({
                     className={cn("h-9", !active && "bg-input border-border")}
                     onClick={() => pickMonth(month)}
                   >
-                    {format(new Date(monthYear, i, 1), "MMM")}
+                    {format(new Date(monthYear, i, 1), "MMM", { locale: dateLocale })}
                   </Button>
                 );
               })}
@@ -235,8 +248,8 @@ export function PeriodFilter({
             >
               <span className="truncate">
                 {value.start && value.end && !selectedMonth && presetId === "custom"
-                  ? formatRangeLabel(value.start, value.end)
-                  : "Custom range"}
+                  ? formatRangeLabel(value.start, value.end, t, dateLocale)
+                  : t("customRange")}
               </span>
               <CalendarIcon className="h-4 w-4 shrink-0 text-foreground opacity-100" />
             </Button>
