@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState } from "react";
 import { Shell } from "@/components/Shell";
 import { useI18n } from "@/lib/i18n";
 import { VisitorTrafficSection } from "@/components/VisitorTraffic";
@@ -23,8 +24,25 @@ export const Route = createFileRoute("/statistics")({
 
 function StatisticsPage() {
   const { t, locale, known } = useI18n();
+  const [now, setNow] = useState(() => new Date());
   const summaryFn = useServerFn(getSummary);
   const eventsFn = useServerFn(getEvents);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const clock = new Intl.DateTimeFormat(locale, {
+    timeZone: "Asia/Riyadh",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(now);
 
   const { data: summary } = useQuery({
     queryKey: ["lc", "summary"],
@@ -38,11 +56,21 @@ function StatisticsPage() {
   });
 
   return (
-    <Shell title={t("navStatistics")}>
+    <Shell>
+      <div className="mb-6">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">
+          {clock} · {t("location")}
+        </p>
+        <h1 className="font-display text-4xl lg:text-[56px] tracking-tight mt-2 font-medium">
+          {t("business")} <span className="font-normal text-muted-foreground">{t("navStatistics")}</span>
+        </h1>
+      </div>
+
       <VisitorTrafficSection className="mt-0" />
 
-      <div className="mt-8 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-        <h2 className="font-display text-2xl tracking-wider mb-4">{t("zoneTotals")}</h2>
+      <div className="mt-8 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
+        <h2 className="font-display text-xl tracking-wider">{t("zoneTotals")}</h2>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">{t("zoneTotalsHint")}</p>
         <ul className="space-y-2">
           {(summary?.counts.zones ?? [])
             .map((z) => ({ z, c: summary?.counts.counts[z] ?? 0 }))
@@ -55,12 +83,13 @@ function StatisticsPage() {
         </ul>
       </div>
 
-      <section className="mt-8 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-        <h2 className="font-display text-2xl tracking-wider mb-4">{t("eventLog")}</h2>
+      <section className="mt-4 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
+        <h2 className="font-display text-xl tracking-wider">{t("eventLog")}</h2>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">{t("eventLogHint")}</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-start text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr className="text-start text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border/60">
                 <th className="py-2 pe-4">{t("time")}</th>
                 <th className="py-2 pe-4">{t("kind")}</th>
                 <th className="py-2 pe-4">{t("zones")}</th>

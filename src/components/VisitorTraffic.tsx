@@ -69,8 +69,10 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
   return (
     <section className={className ?? "mt-12"}>
       <div className="mb-5">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("visitsEyebrow")}</p>
-        <h2 className="font-display text-3xl tracking-tight font-medium mt-1">{t("whenPeople")}</h2>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-accent">{t("angle2")}</p>
+        <h2 className="font-display text-3xl tracking-tight font-medium">
+          {t("business")} <span className="text-accent font-normal">{t("insights")}</span>
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">{t("whenPeopleHint")}</p>
       </div>
 
@@ -85,14 +87,14 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-3 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-            <h3 className="font-display text-2xl tracking-wider">{t("enteredByHour")}</h3>
+            <h3 className="font-display text-xl tracking-wider">{t("enteredByHour")}</h3>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-input px-3 text-sm outline-none focus:border-primary transition cursor-pointer"
+              className="h-9 rounded-full border border-border bg-card/70 px-3 text-xs uppercase tracking-wider outline-none focus:border-primary transition cursor-pointer"
             >
               <option value="today">{t("todayActual")}</option>
               {DOW_LABELS.map((label, i) => (
@@ -117,8 +119,9 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
             </>
           )}
         </div>
-        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-6">
-          <h3 className="font-display text-2xl tracking-wider mb-4">{t("entered14")}</h3>
+        <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
+          <h3 className="font-display text-xl tracking-wider">{t("entered14")}</h3>
+          <p className="text-xs text-muted-foreground mt-1 mb-4">{t("whenPeopleHint")}</p>
           <DailyChart days={daily?.days ?? []} />
         </div>
       </div>
@@ -146,12 +149,13 @@ function Kpi({
     accent: "text-accent",
   } as const;
   return (
-    <div className="rounded-2xl bg-gradient-card border border-border p-5 shadow-soft">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
-        <Icon className={`w-4 h-4 ${map[tone]}`} />
+    <div className="rounded-[22px] bg-gradient-card border border-border shadow-soft p-5">
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${tone === "success" ? "bg-success" : tone === "warning" ? "bg-warning" : tone === "accent" ? "bg-accent" : "bg-primary"}`} />
+        <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
+        <Icon className={`w-4 h-4 ms-auto ${map[tone]}`} />
       </div>
-      <div className="font-display text-4xl tabular-nums">{value}</div>
+      <div className="font-display text-[34px] leading-none tabular-nums mt-3 font-medium">{value}</div>
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   );
@@ -192,7 +196,7 @@ function HourlyChart({
               <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
                 <BarTip label={formatHour12(h.hour, lang)} value={h.entries} />
                 <div
-                  className="w-4 max-w-full rounded-t bg-warning group-hover:brightness-110"
+                  className="w-4 max-w-full rounded-t bg-primary group-hover:brightness-110"
                   style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }}
                 />
               </div>
@@ -204,7 +208,7 @@ function HourlyChart({
         })}
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-warning" /> {t("customersEntered")}</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> {t("customersEntered")}</span>
       </div>
     </div>
   );
@@ -246,7 +250,7 @@ function DailyChart({
               <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
                 <BarTip label={label} value={d.entries} />
                 <div
-                  className="w-full max-w-5 rounded-t bg-warning/85 group-hover:bg-warning transition-colors"
+                  className="w-full max-w-5 rounded-t bg-primary/85 group-hover:bg-primary transition-colors"
                   style={{ height: `${d.entries ? Math.max(h, 3) : 0}%` }}
                 />
               </div>

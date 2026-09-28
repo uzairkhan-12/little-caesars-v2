@@ -57,7 +57,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center gap-3">
-        <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain shrink-0" />
+        <Link to="/" aria-label={t("navOverview")} className="shrink-0">
+          <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain" />
+        </Link>
 
         {showNav && (
           <nav className="hidden sm:flex items-center gap-1 rounded-full bg-card/70 border border-border p-1 mx-auto">
