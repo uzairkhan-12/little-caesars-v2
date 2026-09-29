@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
+import { CHART_BLUE } from "@/lib/chart-colors";
 import { ENERGY_SAR_PER_KWH } from "@/lib/energy-devices";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
@@ -103,6 +104,13 @@ function hourLabel(hour: number, lang: "en" | "ar") {
   return `${h} ${period}`;
 }
 
+/** kWh saved versus each available baseline, then averaged. */
+function averageSavedKwh(current: number, baselines: Array<number | null | undefined>) {
+  const gaps = baselines.filter((n): n is number => n != null).map((baseline) => baseline - current);
+  if (!gaps.length) return null;
+  return gaps.reduce((sum, n) => sum + n, 0) / gaps.length;
+}
+
 function changePct(current: number, previous: number | null | undefined) {
   if (previous == null) return null;
   if (previous === 0) return current === 0 ? 0 : 100;
@@ -118,12 +126,14 @@ function quarterKeys(todayKey: string) {
 
 function quarterKwh(energy: ChainEnergy, field: "total" | "prevYear") {
   const keys = quarterKeys(energy.todayKey);
-  return energy.yearMonths.filter((m) => keys.includes(m.month)).reduce((s, m) => s + m[field], 0);
+  const through = energy.todayKey.slice(0, 7);
+  return energy.yearMonths.filter((m) => keys.includes(m.month) && m.month <= through).reduce((s, m) => s + m[field], 0);
 }
 
 function yearKwh(energy: ChainEnergy, field: "total" | "prevYear") {
   const prefix = energy.todayKey.slice(0, 4);
-  return energy.yearMonths.filter((m) => m.month.startsWith(prefix)).reduce((s, m) => s + m[field], 0);
+  const through = energy.todayKey.slice(0, 7);
+  return energy.yearMonths.filter((m) => m.month.startsWith(prefix) && m.month <= through).reduce((s, m) => s + m[field], 0);
 }
 
 function energyCurrent(energy: ChainEnergy, range: ChainRange, liveToday: number) {
@@ -211,7 +221,7 @@ function KpiCard({
         <div className="font-display text-[34px] leading-none tabular-nums mt-3 font-medium">{value}</div>
         <div className="mt-2 space-y-0.5">{children}</div>
       </div>
-      <Sparkline data={series} color={color} />
+      <Sparkline data={series} color={CHART_BLUE} />
     </div>
   );
 }
@@ -221,11 +231,13 @@ export function ChainKpiGrid({
   visitors,
   range,
   liveTodayKwh,
+  side = "all",
 }: {
   energy: ChainEnergy;
   visitors: ChainVisitors;
   range: ChainRange;
   liveTodayKwh: number;
+  side?: "all" | "energy" | "business";
 }) {
   const { t, lang, locale, known } = useI18n();
   const money = lang === "ar" ? "ر.س" : "SAR";
@@ -260,24 +272,33 @@ export function ChainKpiGrid({
   const prevKwhPerCust = prevVisits && prevKwh && prevVisits > 0 ? prevKwh / prevVisits : null;
   const kwhPerCustPct =
     kwhPerCust != null && prevKwhPerCust ? ((kwhPerCust - prevKwhPerCust) / prevKwhPerCust) * 100 : null;
-  const yearBaseline =
-    range === "today"
-      ? (energy.todayLastYear ?? null)
-      : range === "yesterday"
-        ? (energy.yesterdayLastYear ?? null)
-        : range === "week"
-          ? (energy.weekToDate?.previous ?? null)
-          : range === "mtd"
-            ? energy.year.previous
-            : range === "quarter"
-              ? quarterKwh(energy, "prevYear") || null
-              : yearKwh(energy, "prevYear") || null;
-  const savedKwh = yearBaseline != null ? yearBaseline - kwh : null;
-  const savedSar = savedKwh != null ? savedKwh * energy.tariffSarPerKwh : energy.savedVsYearSar;
-  const avoidedPct = yearBaseline ? ((yearBaseline - kwh) / yearBaseline) * 100 : null;
-  const ytdSaved = energy.yearMonths
-    .filter((m) => m.month.startsWith(energy.todayKey.slice(0, 4)))
-    .reduce((s, m) => s + (m.prevYear - m.total) * energy.tariffSarPerKwh, 0);
+  const monthKwh = energy.month.current;
+  const lastMonthKwh = energy.month.previous;
+  const lastYearKwh = energy.year.previous;
+  const rate = energy.tariffSarPerKwh || ENERGY_SAR_PER_KWH;
+  const savedKwh = averageSavedKwh(monthKwh, [lastMonthKwh, lastYearKwh]);
+  const savedSar = savedKwh != null ? savedKwh * rate : null;
+  const avgBaseline =
+    lastMonthKwh != null && lastYearKwh != null
+      ? (lastMonthKwh + lastYearKwh) / 2
+      : (lastMonthKwh ?? lastYearKwh);
+  const avoidedPct = avgBaseline ? ((avgBaseline - monthKwh) / avgBaseline) * 100 : null;
+  const kwhText = (n: number) => n.toLocaleString(locale, { maximumFractionDigits: 1 });
+  const savingsFormula =
+    lastMonthKwh != null && lastYearKwh != null
+      ? t("savingsFormula", {
+          last: kwhText(lastMonthKwh),
+          year: kwhText(lastYearKwh),
+          now: kwhText(monthKwh),
+          rate: rate.toFixed(2),
+        })
+      : lastMonthKwh != null || lastYearKwh != null
+        ? t("savingsFormulaOne", {
+            base: kwhText((lastMonthKwh ?? lastYearKwh) as number),
+            now: kwhText(monthKwh),
+            rate: rate.toFixed(2),
+          })
+        : null;
   const month = known(monthLong(energy.todayKey, locale));
   const energySeries =
     range === "today" || range === "yesterday" || range === "week"
@@ -301,7 +322,9 @@ export function ChainKpiGrid({
     const v = visitRunning[i] ?? 0;
     return v > 0 ? e.current / v : 0;
   });
-  const savedSeries = energy.cumulative.map((e) => Math.max(0, e.year - e.current) * energy.tariffSarPerKwh);
+  const savedSeries = energy.cumulative.map(
+    (e) => ((e.previous - e.current + (e.year - e.current)) / 2) * rate,
+  );
   const energyLabel =
     range === "today"
       ? t("energyToday")
@@ -372,23 +395,26 @@ export function ChainKpiGrid({
               : { pct: visitors.yearYtdChangePct ?? null, vs: t("vsLastYearSame") };
   const visitDeltaB = range === "mtd" ? { pct: visitors.yearChangePct, vs: t("vsMonthLastYear", { month }) } : null;
 
+  const showEnergy = side !== "business";
+  const showBusiness = side !== "energy";
+
   return (
-    <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-      <KpiCard label={energyLabel} value={formatEnergy(kwh, locale)} color="#38bdf8" series={energySeries}>
+    <div className={side === "all" ? "mt-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" : "grid grid-cols-1 sm:grid-cols-2 gap-4"}>
+      {showEnergy && <KpiCard label={energyLabel} value={formatEnergy(kwh, locale)} color="#38bdf8" series={energySeries}>
         {energyDeltaA && <DeltaLine pct={energyDeltaA.pct} vs={energyDeltaA.pct == null ? t("needMoreDays", { vs: energyDeltaA.vs }) : energyDeltaA.vs} />}
         {energyDeltaB && <DeltaLine pct={energyDeltaB.pct} vs={energyDeltaB.pct == null ? t("needMoreDays", { vs: energyDeltaB.vs }) : energyDeltaB.vs} />}
         {range === "today" && <p className="text-[11px] text-muted-foreground">{t("liveSinceMorning")}</p>}
-      </KpiCard>
-      <KpiCard label={costLabel} value={formatSar(cost, locale, money)} color="#64748b" series={energySeries}>
+      </KpiCard>}
+      {showEnergy && <KpiCard label={costLabel} value={formatSar(cost, locale, money)} color="#64748b" series={energySeries}>
         {energyDeltaA && <DeltaLine pct={energyDeltaA.pct} vs={energyDeltaA.pct == null ? t("needMoreDays", { vs: energyDeltaA.vs }) : energyDeltaA.vs} />}
         <p className="text-[11px] text-muted-foreground">{t("tariffLine", { rate: energy.tariffSarPerKwh.toFixed(2) })}</p>
-      </KpiCard>
-      <KpiCard label={visitLabel} value={formatVisits(visits, locale)} color="#a78bfa" series={visitSeries}>
+      </KpiCard>}
+      {showBusiness && <KpiCard label={visitLabel} value={formatVisits(visits, locale)} color="#a78bfa" series={visitSeries}>
         {visitDeltaA && <DeltaLine pct={visitDeltaA.pct} vs={visitDeltaA.pct == null ? t("needMoreDays", { vs: visitDeltaA.vs }) : visitDeltaA.vs} invert />}
         {visitDeltaB && <DeltaLine pct={visitDeltaB.pct} vs={visitDeltaB.pct == null ? t("needMoreDays", { vs: visitDeltaB.vs }) : visitDeltaB.vs} invert />}
         {range === "today" && <p className="text-[11px] text-muted-foreground">{t("liveTodayCompare")}</p>}
-      </KpiCard>
-      <KpiCard label={t("visitorsSoFar")} value={formatVisits(visitors.todayVisits, locale)} color="#8b5cf6" series={visitors.todayHourly}>
+      </KpiCard>}
+      {showBusiness && <KpiCard label={t("visitorsSoFar")} value={formatVisits(visitors.todayVisits, locale)} color="#8b5cf6" series={visitors.todayHourly}>
         {range !== "today" && (
           <DeltaLine
             pct={todayVsLast}
@@ -403,8 +429,8 @@ export function ChainKpiGrid({
           />
         )}
         <p className="text-[11px] text-muted-foreground">{t("liveSinceMidnight")}</p>
-      </KpiCard>
-      <KpiCard
+      </KpiCard>}
+      {showEnergy && <KpiCard
         label={t("kwhPerCustomer")}
         value={kwhPerCust == null ? "—" : kwhPerCust.toFixed(2)}
         color="#38bdf8"
@@ -417,21 +443,18 @@ export function ChainKpiGrid({
           />
         )}
         <p className="text-[11px] text-muted-foreground">{visits > 0 ? t("visitsInRange", { count: formatVisits(visits, locale) }) : t("needVisits")}</p>
-      </KpiCard>
-      <KpiCard
+      </KpiCard>}
+      {showEnergy && <KpiCard
         label={t("savedBySystem")}
-        value={range === "today" || savedSar == null ? "—" : formatSar(savedSar, locale, money)}
+        value={savedSar == null ? "—" : `${savedSar < 0 ? "−" : ""}${formatSar(savedSar, locale, money)}`}
         color="#34d399"
-        series={range === "today" ? [] : savedSeries}
+        series={savedSeries}
       >
-        {range !== "today" && (
-          <DeltaLine pct={avoidedPct} vs={avoidedPct == null ? t("needMoreDays", { vs: t("ofBaseline") }) : t("ofBaseline")} invert />
-        )}
-        <p className="text-[11px] text-muted-foreground">
-          {range === "today" ? t("fullDayCompare") : t("yearToDateSaved", { amount: formatSar(ytdSaved, locale, money) })}
-        </p>
-      </KpiCard>
-      <KpiCard
+        <DeltaLine pct={avoidedPct} vs={avoidedPct == null ? t("needMoreDays", { vs: t("savingsOfAvg") }) : t("savingsOfAvg")} invert />
+        <p className="text-[11px] text-muted-foreground">{t("savingsBasis")}</p>
+        {savingsFormula ? <p className="text-[11px] text-muted-foreground tabular-nums leading-snug">{savingsFormula}</p> : null}
+      </KpiCard>}
+      {showBusiness && <KpiCard
         label={t("peakHour")}
         value={peakLabel ?? "—"}
         color="#a78bfa"
@@ -441,8 +464,8 @@ export function ChainKpiGrid({
           {peakLabel ? t("customersCount", { count: peakCount }) : t("waitingCounts")}
         </p>
         <p className="text-[11px] text-muted-foreground">{t("busiestHourToday")}</p>
-      </KpiCard>
-      <KpiCard
+      </KpiCard>}
+      {showBusiness && <KpiCard
         label={t("tableUseNow")}
         value={visitors.tableUsePct == null ? "—" : `${visitors.tableUsePct.toFixed(0)} %`}
         color="#f472b6"
@@ -452,7 +475,7 @@ export function ChainKpiGrid({
           {t("tablesOccupied", { occupied: visitors.occupiedTables, tables: visitors.tables || "—" })}
         </p>
         <p className="text-[11px] text-muted-foreground">{t("peopleOnFloor", { count: visitors.occupancy })}</p>
-      </KpiCard>
+      </KpiCard>}
     </div>
   );
 }
@@ -470,7 +493,8 @@ export function BranchesBoard({
   const kwh = energy.month.current;
   const visits = visitors.mtd;
   const kwhPerCust = visits > 0 ? kwh / visits : null;
-  const saved = energy.month.previous != null ? (energy.year.previous != null ? (energy.year.previous - kwh) * energy.tariffSarPerKwh : null) : energy.savedVsYearSar;
+  const savedKwhAvg = averageSavedKwh(kwh, [energy.month.previous, energy.year.previous]);
+  const saved = savedKwhAvg != null ? savedKwhAvg * energy.tariffSarPerKwh : null;
   const vsAug = energy.month.changePct;
   const trend = energy.days.map((d) => d.total);
 
@@ -526,13 +550,13 @@ export function BranchesBoard({
                   <td className="px-5 py-4 text-end tabular-nums">{kwhPerCust == null ? "—" : kwhPerCust.toFixed(2)}</td>
                   <td className="px-5 py-4 text-end tabular-nums">{formatKwh(kwh, 0, locale)}</td>
                   <td className="px-5 py-4 text-end tabular-nums text-primary">
-                    {saved == null ? "—" : formatSar(Math.max(0, saved), locale, money)}
+                    {saved == null ? "—" : `${saved < 0 ? "−" : ""}${formatSar(saved, locale, money)}`}
                   </td>
                   <td className={`px-5 py-4 text-end tabular-nums ${vsAug == null ? "text-muted-foreground" : vsAug > 0 ? "text-warning" : "text-success"}`}>
                     {vsAug == null ? "—" : `${vsAug > 0 ? "▲" : "▼"} ${Math.abs(vsAug).toFixed(0)}%`}
                   </td>
                   <td className="px-5 py-4">
-                    <Sparkline data={trend} color={vsAug != null && vsAug > 0 ? "#f87171" : "#38bdf8"} />
+                    <Sparkline data={trend} color={CHART_BLUE} />
                   </td>
                   <td className="px-5 py-4 text-end">
                     <Link
@@ -552,7 +576,7 @@ export function BranchesBoard({
                   <td className="px-5 py-4 text-end">—</td>
                   <td className="px-5 py-4 text-end">—</td>
                   <td className="px-5 py-4">
-                    <Sparkline data={[0, 0, 0, 0]} color="#64748b" />
+                    <Sparkline data={[0, 0, 0, 0]} color={CHART_BLUE} />
                   </td>
                   <td className="px-5 py-4 text-end text-xs">{t("notIntegrated")}</td>
                 </tr>

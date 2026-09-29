@@ -23,6 +23,7 @@ import { getGateStatus } from "@/lib/gate.functions";
 import { getEnergyBaselines, getEnergyOverview } from "@/lib/energy-reports.functions";
 import { getVisitorOverview } from "@/lib/lc.functions";
 import { getStates, type HAState } from "@/lib/ha.functions";
+import { CHART_BLUE, CHART_ORANGE, CHART_PURPLE, CHART_SERIES } from "@/lib/chart-colors";
 import {
   REPORT_DEVICES,
   REPORT_TABLE_LABELS,
@@ -62,20 +63,39 @@ function monthLong(dayKey: string, dateLocale: Locale) {
 
 function compareChart(t: TFunction): ChartConfig {
   return {
-    current: { label: t("thisPeriod"), color: "#5eead4" },
-    previous: { label: t("lastMonth"), color: "#38bdf8" },
-    year: { label: t("lastYear"), color: "#64748b" },
+    current: { label: t("thisPeriod"), color: CHART_BLUE },
+    previous: { label: t("lastMonth"), color: CHART_PURPLE },
+    year: { label: t("lastYear"), color: CHART_ORANGE },
   };
+}
+
+function daypartChart(known: (text: string) => string): ChartConfig {
+  return {
+    breakfast: { label: known("Breakfast"), color: CHART_SERIES[0] },
+    lunch: { label: known("Lunch"), color: CHART_SERIES[1] },
+    dinner: { label: known("Dinner"), color: CHART_SERIES[2] },
+    lateNight: { label: known("Late night"), color: CHART_SERIES[3] },
+  };
+}
+
+function weekSpan(start: string, end: string, dateLocale: Locale) {
+  const startDate = parse(start, "yyyy-MM-dd", new Date());
+  const endDate = parse(end, "yyyy-MM-dd", new Date());
+  if (start === end) return format(startDate, "d MMM", { locale: dateLocale });
+  if (start.slice(0, 7) === end.slice(0, 7)) {
+    return `${format(startDate, "d", { locale: dateLocale })}–${format(endDate, "d MMM", { locale: dateLocale })}`;
+  }
+  return `${format(startDate, "d MMM", { locale: dateLocale })}–${format(endDate, "d MMM", { locale: dateLocale })}`;
 }
 
 function loadChart(t: TFunction, known: (text: string) => string): ChartConfig {
   return {
-    ac: { label: known("AC"), color: "#5eead4" },
-    oven: { label: known("Oven"), color: "#f5a524" },
-    freezer: { label: known("Freezer"), color: "#34d399" },
-    chiller: { label: known("Chiller"), color: "#38bdf8" },
-    lights: { label: known("Lights"), color: "#5eb3ff" },
-    prevYear: { label: t("previousYear"), color: "#94a3b8" },
+    lights: { label: known("Lights"), color: CHART_SERIES[0] },
+    ac: { label: known("AC"), color: CHART_SERIES[1] },
+    oven: { label: known("Oven"), color: CHART_SERIES[2] },
+    freezer: { label: known("Freezer"), color: CHART_SERIES[3] },
+    chiller: { label: known("Chiller"), color: CHART_SERIES[4] },
+    prevYear: { label: t("previousYear"), color: CHART_SERIES[5] },
   };
 }
 
@@ -198,18 +218,34 @@ function OverviewPage() {
 
       {e && (
         <>
-          <ChainKpiGrid
-            energy={e as EnergyData}
-            visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
-            range={range}
-            liveTodayKwh={liveTodayKwh}
-          />
-          <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-10 items-stretch">
+          <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-10 items-stretch">
             <div className="min-w-0 h-full">
-              <EnergyAngleSection energy={e as EnergyData} />
+              <EnergyAngleSection
+                energy={e as EnergyData}
+                counts={
+                  <ChainKpiGrid
+                    energy={e as EnergyData}
+                    visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
+                    range={range}
+                    liveTodayKwh={liveTodayKwh}
+                    side="energy"
+                  />
+                }
+              />
             </div>
             <div className="min-w-0 h-full">
-              <BusinessAngle visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS} />
+              <BusinessAngle
+                visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
+                counts={
+                  <ChainKpiGrid
+                    energy={e as EnergyData}
+                    visitors={(v as VisitorData | undefined) ?? EMPTY_VISITORS}
+                    range={range}
+                    liveTodayKwh={liveTodayKwh}
+                    side="business"
+                  />
+                }
+              />
             </div>
           </div>
           <EnergyDetailSection energy={e as EnergyData} />
@@ -269,7 +305,7 @@ type VisitorData = {
   yearToDate: number;
   throughDay: number;
   cumulative: Array<{ day: number; current: number | null; previous: number | null; year: number | null }>;
-  dayparts: Array<{ name: string; current: number }>;
+  dayparts: Array<{ start: string; end: string; breakfast: number; lunch: number; dinner: number; lateNight: number }>;
   heatmap: Array<{ dow: number; name: string; hours: number[] }>;
   busiest: string | null;
   quietest: string | null;
@@ -322,7 +358,7 @@ const EMPTY_VISITORS: VisitorData = {
   yearYtdChangePct: null,
 };
 
-function EnergyAngleSection({ energy }: { energy: EnergyData }) {
+function EnergyAngleSection({ energy, counts }: { energy: EnergyData; counts?: ReactNode }) {
   const { t, dateLocale, known } = useI18n();
   const loadRows = energy.load.map((row) => ({
     name: known(REPORT_TABLE_LABELS[row.id]),
@@ -350,6 +386,8 @@ function EnergyAngleSection({ energy }: { energy: EnergyData }) {
           {t("viewReports")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
         </Link>
       </div>
+
+      {counts ? <div className="mb-4">{counts}</div> : null}
 
       <div className="grid grid-cols-1 gap-4">
         <Panel title={t("monthCompareTitle")} hint={t("monthCompareHint")}>
@@ -388,10 +426,30 @@ function EnergyAngleSection({ energy }: { energy: EnergyData }) {
 
       <div className="mt-4 flex-1 flex">
         <Panel className="w-full h-full" title={t("yearTrendTitle")} hint={t("yearTrendHint", { month })}>
-          <ChartContainer config={loadChart(t, known)} className="aspect-auto h-72">
-            <ComposedChart data={yearMonths} margin={{ left: 4, right: 8, top: 8 }}>
+          <ChartContainer config={loadChart(t, known)} className="aspect-auto h-80">
+            <ComposedChart data={yearMonths} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} />
+              <XAxis
+                dataKey="label"
+                interval={0}
+                tickLine={false}
+                axisLine={false}
+                height={68}
+                tick={({ x, y, payload }) => (
+                  <text
+                    x={x}
+                    y={y}
+                    dy={8}
+                    textAnchor="end"
+                    direction="ltr"
+                    fill="currentColor"
+                    fontSize={11}
+                    transform={`rotate(-40, ${x}, ${y})`}
+                  >
+                    {payload?.value}
+                  </text>
+                )}
+              />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatKwh(Number(v))} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
@@ -408,11 +466,11 @@ function EnergyAngleSection({ energy }: { energy: EnergyData }) {
 }
 
 const CAT_COLOR: Record<ReportTable, string> = {
-  lights: "bg-primary",
-  ac: "bg-accent",
-  oven: "bg-warning",
-  freezer: "bg-success",
-  chiller: "bg-sky-500",
+  lights: CHART_SERIES[0],
+  ac: CHART_SERIES[1],
+  oven: CHART_SERIES[2],
+  freezer: CHART_SERIES[3],
+  chiller: CHART_SERIES[4],
 };
 
 function EnergyDetailSection({ energy }: { energy: EnergyData }) {
@@ -447,7 +505,7 @@ function EnergyDetailSection({ energy }: { energy: EnergyData }) {
         <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
           {REPORT_TABLES.map((id) => (
             <span key={id} className="flex items-center gap-1.5">
-              <span className={`w-2.5 h-2.5 rounded-sm ${CAT_COLOR[id]}`} />
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: CAT_COLOR[id] }} />
               {known(REPORT_TABLE_LABELS[id])}
             </span>
           ))}
@@ -488,7 +546,7 @@ function Last14DaysChart({
               >
                 {REPORT_TABLES.map((id) =>
                   d[id] > 0 ? (
-                    <div key={id} className={CAT_COLOR[id]} style={{ height: `${(d[id] / d.total) * 100}%` }} />
+                    <div key={id} style={{ height: `${(d[id] / d.total) * 100}%`, background: CAT_COLOR[id] }} />
                   ) : null,
                 )}
               </div>
@@ -503,9 +561,13 @@ function Last14DaysChart({
   );
 }
 
-function BusinessAngle({ visitors }: { visitors: VisitorData }) {
-  const { t, known } = useI18n();
-  const dayparts = visitors.dayparts.map((d) => ({ ...d, name: known(d.name) }));
+function BusinessAngle({ visitors, counts }: { visitors: VisitorData; counts?: ReactNode }) {
+  const { t, known, dateLocale } = useI18n();
+  const dayparts = visitors.dayparts.map((row) => ({
+    ...row,
+    label: weekSpan(row.start, row.end, dateLocale),
+  }));
+  const hasDayparts = dayparts.some((row) => row.breakfast || row.lunch || row.dinner || row.lateNight);
   return (
     <section className="h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
@@ -520,6 +582,8 @@ function BusinessAngle({ visitors }: { visitors: VisitorData }) {
           {t("viewBusiness")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
         </Link>
       </div>
+
+      {counts ? <div className="mb-4">{counts}</div> : null}
 
       <div className="grid grid-cols-1 gap-4">
         <Panel title={t("visitsMonthTitle")} hint={t("visitsMonthHint")}>
@@ -540,27 +604,33 @@ function BusinessAngle({ visitors }: { visitors: VisitorData }) {
           )}
         </Panel>
         <Panel title={t("daypartTitle")} hint={t("daypartHint")}>
-          <ChartContainer config={{ current: { label: t("customerVisits"), color: "#5eb3ff" } }} className="aspect-auto h-64">
-            <BarChart data={dayparts} margin={{ left: 4, right: 8, top: 8 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="name" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatVisits(Number(v))} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="current" fill="var(--color-current)" radius={4} />
-            </BarChart>
-          </ChartContainer>
+          {hasDayparts ? (
+            <ChartContainer config={daypartChart(known)} className="aspect-auto h-64">
+              <BarChart data={dayparts} margin={{ left: 4, right: 8, top: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v) => formatVisits(Number(v))} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="breakfast" fill="var(--color-breakfast)" radius={4} />
+                <Bar dataKey="lunch" fill="var(--color-lunch)" radius={4} />
+                <Bar dataKey="dinner" fill="var(--color-dinner)" radius={4} />
+                <Bar dataKey="lateNight" fill="var(--color-lateNight)" radius={4} />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <EmptyChart />
+          )}
         </Panel>
       </div>
 
-      <div className="mt-4 flex-1 flex">
-        <Panel className="w-full h-full" title={t("whenCustomers")} hint={t("whenCustomersHint")}>
-          <div className="h-72 flex flex-col justify-center">
-            <Heatmap rows={visitors.heatmap.map((row) => ({ ...row, name: known(row.name) }))} />
-            <p className="text-xs text-muted-foreground mt-3">
-              {visitors.busiest ? t("busiestLine", { value: known(visitors.busiest) }) : ""}
-              {visitors.quietest ? ` · ${t("quietestLine", { value: known(visitors.quietest) })}` : ""}
-            </p>
-          </div>
+      <div className="mt-4">
+        <Panel title={t("whenCustomers")} hint={t("whenCustomersHint")}>
+          <Heatmap rows={visitors.heatmap.map((row) => ({ ...row, name: known(row.name) }))} />
+          <p className="text-xs text-muted-foreground mt-3">
+            {visitors.busiest ? t("busiestLine", { value: known(visitors.busiest) }) : ""}
+            {visitors.quietest ? ` · ${t("quietestLine", { value: known(visitors.quietest) })}` : ""}
+          </p>
         </Panel>
       </div>
     </section>
@@ -572,34 +642,32 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
   const hours = [10, 13, 16, 19, 22];
   const max = Math.max(1, ...rows.flatMap((r) => r.hours));
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[520px]">
-        <div className="grid grid-cols-[4.5rem_repeat(24,minmax(0,1fr))] gap-1 text-[10px] text-muted-foreground mb-2">
-          <div />
-          {Array.from({ length: 24 }, (_, h) => (
-            <div key={h} className="text-center">
-              {hours.includes(h) ? `${((h + 11) % 12) + 1}${lang === "ar" ? (h >= 12 ? "م" : "ص") : h >= 12 ? "p" : "a"}` : ""}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1">
-          {rows.map((row) => (
-            <div key={row.name} className="grid grid-cols-[4.5rem_repeat(24,minmax(0,1fr))] gap-1">
-              <div className="text-xs text-muted-foreground truncate pr-2 flex items-center">{row.name.slice(0, 3)}</div>
-              {row.hours.map((n, h) => {
-                const t = n / max;
-                return (
-                  <div
-                    key={h}
-                    title={`${row.name} ${h}:00 · ${n.toFixed(0)}`}
-                    className="aspect-square rounded-[4px]"
-                    style={{ background: `color-mix(in oklab, var(--primary) ${Math.round(t * 100)}%, var(--muted))` }}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </div>
+    <div className="w-full min-w-0">
+      <div className="grid grid-cols-[auto_repeat(24,minmax(0,1fr))] gap-1 text-[10px] text-muted-foreground mb-2">
+        <div />
+        {Array.from({ length: 24 }, (_, h) => (
+          <div key={h} className="text-center overflow-hidden leading-none">
+            {hours.includes(h) ? `${((h + 11) % 12) + 1}${lang === "ar" ? (h >= 12 ? "م" : "ص") : h >= 12 ? "p" : "a"}` : ""}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <div key={row.name} className="grid grid-cols-[auto_repeat(24,minmax(0,1fr))] gap-1">
+            <div className="text-xs text-muted-foreground whitespace-nowrap pe-2 flex items-center">{row.name}</div>
+            {row.hours.map((n, h) => {
+              const t = n / max;
+              return (
+                <div
+                  key={h}
+                  title={`${row.name} ${h}:00 · ${n.toFixed(0)}`}
+                  className="aspect-square min-w-0 rounded-[4px]"
+                  style={{ background: `color-mix(in oklab, ${CHART_BLUE} ${Math.round(t * 100)}%, var(--muted))` }}
+                />
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -679,7 +747,7 @@ function buildAlerts(
       out.push({
         tone: "bad",
         title: t("alertCooling"),
-        detail: t("coolingDetail", { name, cur: cur.toFixed(1), tgt: tgt.toFixed(0) }),
+        detail: t("coolingDetail", { name, cur: cur.toFixed(1) }),
       });
     }
   }

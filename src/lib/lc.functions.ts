@@ -275,13 +275,32 @@ function dailyEntries(days: DayBucket[], ym: string, throughDay: number): Array<
   });
 }
 
-const DAYPARTS: Array<{ name: string; hours: number[] }> = [
-  { name: "Breakfast", hours: [6, 7, 8, 9] },
-  { name: "Lunch", hours: [10, 11, 12, 13] },
-  { name: "Afternoon", hours: [14, 15, 16] },
-  { name: "Dinner", hours: [17, 18, 19, 20] },
-  { name: "Late night", hours: [21, 22, 23, 0, 1, 2, 3, 4, 5] },
-];
+const DAYPART_KEYS = ["breakfast", "lunch", "dinner", "lateNight"] as const;
+type DaypartKey = (typeof DAYPART_KEYS)[number];
+/** Local hours included in each part. Breakfast is 8 AM–12 PM, lunch 12 PM–7 PM, dinner 7 PM–12 AM, late night 12 AM–5 AM. */
+const DAYPART_HOURS: Record<DaypartKey, number[]> = {
+  breakfast: [8, 9, 10, 11],
+  lunch: [12, 13, 14, 15, 16, 17, 18],
+  dinner: [19, 20, 21, 22, 23],
+  lateNight: [0, 1, 2, 3, 4],
+};
+
+function recentWeekSpans(todayKey: string, weeks = 4) {
+  const thisWeekStart = weekStartSaturday(todayKey);
+  const spans: Array<{ start: string; end: string }> = [];
+  const days: string[] = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const start = addDaysKey(thisWeekStart, -7 * w);
+    const last = addDaysKey(start, 6);
+    const end = last > todayKey ? todayKey : last;
+    spans.push({ start, end });
+    for (let i = 0; i < 7; i++) {
+      const key = addDaysKey(start, i);
+      if (key <= todayKey) days.push(key);
+    }
+  }
+  return { spans, days };
+}
 
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -302,7 +321,7 @@ export type VisitorOverview = {
   yearToDate: number;
   throughDay: number;
   cumulative: Array<{ day: number; current: number | null; previous: number | null; year: number | null }>;
-  dayparts: Array<{ name: string; current: number }>;
+  dayparts: Array<{ start: string; end: string; breakfast: number; lunch: number; dinner: number; lateNight: number }>;
   heatmap: Array<{ dow: number; name: string; hours: number[] }>;
   busiest: string | null;
   quietest: string | null;
@@ -352,7 +371,8 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
     })),
   });
 
-  const [dailyRaw, todayRaw, hourlyRaw, counts, ...dowRaws] = await Promise.all([
+  const { spans: weekSpans, days: daypartDays } = recentWeekSpans(todayKey, 4);
+  const [dailyRaw, todayRaw, hourlyRaw, counts, daypartHourly, ...dowRaws] = await Promise.all([
     safeJson<DailyResponse>("/api/daily?days=365", { since: "", days: [] }),
     safeJson<TodayResponse>(`/api/today`, {
       date: todayKey,
@@ -362,6 +382,16 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
     }),
     safeJson<HourlyResponse>("/api/hourly", emptyHourly),
     safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
+    Promise.all(
+      daypartDays.map(async (day) => {
+        const empty: HourlyResponse = {
+          date: day,
+          hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
+        };
+        const raw = await safeJson<HourlyResponse>(`/api/hourly?day=${day}`, empty);
+        return { day, hours: transformHourly(raw).hours };
+      }),
+    ),
     ...[0, 1, 2, 3, 4, 5, 6].map((dow) =>
       safeJson<HourlyDowResponse>(`/api/hourly-by-dow?dow=${dow}&days=28`, emptyDow(dow)),
     ),
@@ -393,16 +423,20 @@ export const getVisitorOverview = createServerFn({ method: "GET" }).handler(asyn
     year: yearDays[i] ?? null,
   }));
 
-  const avgHour = Array.from({ length: 24 }, () => 0);
-  for (const raw of dowRaws) {
-    for (const h of raw.hours) {
-      avgHour[toLocalHour(h.hour)] += h.entries_avg / 7;
+  const hoursByDay = new Map(daypartHourly.map((row) => [row.day, row.hours]));
+  const dayparts = weekSpans.map(({ start, end }) => {
+    const totals: Record<DaypartKey, number> = { breakfast: 0, lunch: 0, dinner: 0, lateNight: 0 };
+    for (let i = 0; i < 7; i++) {
+      const key = addDaysKey(start, i);
+      if (key > end) break;
+      const hours = hoursByDay.get(key) ?? [];
+      for (const part of DAYPART_KEYS) {
+        const included = new Set(DAYPART_HOURS[part]);
+        totals[part] += hours.reduce((sum, bucket) => sum + (included.has(bucket.hour) ? bucket.entries : 0), 0);
+      }
     }
-  }
-  const dayparts = DAYPARTS.map((p) => ({
-    name: p.name,
-    current: p.hours.reduce((s, h) => s + avgHour[h] * throughDay, 0),
-  }));
+    return { start, end, ...totals };
+  });
 
   const heatmap = dowRaws.map((raw, dow) => {
     const hours = Array.from({ length: 24 }, () => 0);

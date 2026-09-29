@@ -54,10 +54,7 @@ function SchedulesPage() {
   });
 
   return (
-    <Shell
-      title={t("navSchedules")}
-      subtitle={t("schedulesSubtitle")}
-    >
+    <Shell title={t("navSchedules")}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {automations.map((a) => {
           const on = a.state === "on";

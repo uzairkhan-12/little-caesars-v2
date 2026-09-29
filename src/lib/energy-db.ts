@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { EnergyReportRow, ReportTable } from "./energy-devices";
+import type { AcQuarterRow, EnergyReportRow, ReportTable } from "./energy-devices";
 
 const SQLITE_PATH = path.join(process.cwd(), "data", "energy.sqlite");
 const JSON_PATH = path.join(process.cwd(), "data", "energy-reports.json");
@@ -44,6 +44,40 @@ function ensureSchema(database: DatabaseSync) {
     ) WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS idx_snapshots_table_day ON snapshots (table_name, day_key);
     CREATE INDEX IF NOT EXISTS idx_snapshots_day ON snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS midnight_snapshots (
+      table_name TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      energy REAL,
+      day TEXT NOT NULL,
+      day_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, day_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_midnight_snapshots_table_day ON midnight_snapshots (table_name, day_key);
+    CREATE INDEX IF NOT EXISTS idx_midnight_snapshots_day ON midnight_snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS hourly_snapshots (
+      table_name TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      energy REAL,
+      day TEXT NOT NULL,
+      day_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, day_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_hourly_snapshots_table_day ON hourly_snapshots (table_name, day_key);
+    CREATE INDEX IF NOT EXISTS idx_hourly_snapshots_day ON hourly_snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS ac_quarter_snapshots (
+      entity_id TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      energy_entity_id TEXT NOT NULL,
+      reading_temp REAL,
+      target_temp REAL,
+      energy REAL,
+      day TEXT NOT NULL,
+      slot_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, slot_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_ac_quarter_slot ON ac_quarter_snapshots (slot_key);
   `);
 }
 
@@ -107,6 +141,91 @@ export function insertSnapshotRows(database: DatabaseSync, rows: EnergyReportRow
     database.exec("ROLLBACK");
     throw err;
   }
+}
+
+export function listMidnightSnapshotRows(table?: ReportTable): EnergyReportRow[] {
+  const database = openEnergyDb();
+  const rows = table
+    ? (database
+        .prepare("SELECT * FROM midnight_snapshots WHERE table_name = ? ORDER BY day_key, entity_id")
+        .all(table) as SnapshotRecord[])
+    : (database.prepare("SELECT * FROM midnight_snapshots ORDER BY day_key, entity_id").all() as SnapshotRecord[]);
+  return rows.map(toRow);
+}
+
+export function listHourlySnapshotRows(table?: ReportTable): EnergyReportRow[] {
+  const database = openEnergyDb();
+  const rows = table
+    ? (database
+        .prepare("SELECT * FROM hourly_snapshots WHERE table_name = ? ORDER BY day_key, entity_id")
+        .all(table) as SnapshotRecord[])
+    : (database.prepare("SELECT * FROM hourly_snapshots ORDER BY day_key, entity_id").all() as SnapshotRecord[]);
+  return rows.map(toRow);
+}
+
+/** Meter reading taken at the start of this hour. Missing means the hourly job has not run yet. */
+export function hourlyBaselineEnergy(hourKey: string): Record<string, number> {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT entity_id, energy FROM hourly_snapshots WHERE day_key = ? AND energy IS NOT NULL")
+    .all(hourKey) as Array<{ entity_id: string; energy: number }>;
+  const out: Record<string, number> = {};
+  for (const row of rows) out[row.entity_id] = row.energy;
+  return out;
+}
+
+type AcQuarterRecord = {
+  entity_id: string;
+  device_name: string;
+  energy_entity_id: string;
+  reading_temp: number | null;
+  target_temp: number | null;
+  energy: number | null;
+  day: string;
+  slot_key: string;
+};
+
+function toAcRow(row: AcQuarterRecord): AcQuarterRow {
+  return {
+    deviceName: row.device_name,
+    entityId: row.entity_id,
+    energyEntityId: row.energy_entity_id,
+    readingTemp: row.reading_temp,
+    targetTemp: row.target_temp,
+    energy: row.energy,
+    day: row.day,
+    slotKey: row.slot_key,
+  };
+}
+
+export function listAcQuarterRows(): AcQuarterRow[] {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT * FROM ac_quarter_snapshots ORDER BY slot_key, entity_id")
+    .all() as AcQuarterRecord[];
+  return rows.map(toAcRow);
+}
+
+/** Sample stored at the start of the current 15-minute slot. */
+export function acQuarterBaseline(slotKey: string): Record<string, { energy: number | null }> {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT entity_id, energy FROM ac_quarter_snapshots WHERE slot_key = ?")
+    .all(slotKey) as Array<{ entity_id: string; energy: number | null }>;
+  const out: Record<string, { energy: number | null }> = {};
+  for (const row of rows) out[row.entity_id] = { energy: row.energy };
+  return out;
+}
+
+/** Meter reading taken at 12:00 AM of this calendar day. Missing means the midnight job has not run yet. */
+export function midnightBaselineEnergy(todayKey: string): Record<string, number> {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT entity_id, energy FROM midnight_snapshots WHERE day_key = ? AND energy IS NOT NULL")
+    .all(todayKey) as Array<{ entity_id: string; energy: number }>;
+  const out: Record<string, number> = {};
+  for (const row of rows) out[row.entity_id] = row.energy;
+  return out;
 }
 
 export function pickBaselineEnergy(entityId: string, todayKey: string): number | null {

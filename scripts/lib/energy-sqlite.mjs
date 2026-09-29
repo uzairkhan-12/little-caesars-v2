@@ -23,7 +23,47 @@ function ensureSchema(db) {
     ) WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS idx_snapshots_table_day ON snapshots (table_name, day_key);
     CREATE INDEX IF NOT EXISTS idx_snapshots_day ON snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS midnight_snapshots (
+      table_name TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      energy REAL,
+      day TEXT NOT NULL,
+      day_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, day_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_midnight_snapshots_table_day ON midnight_snapshots (table_name, day_key);
+    CREATE INDEX IF NOT EXISTS idx_midnight_snapshots_day ON midnight_snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS hourly_snapshots (
+      table_name TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      energy REAL,
+      day TEXT NOT NULL,
+      day_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, day_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_hourly_snapshots_table_day ON hourly_snapshots (table_name, day_key);
+    CREATE INDEX IF NOT EXISTS idx_hourly_snapshots_day ON hourly_snapshots (day_key);
+    CREATE TABLE IF NOT EXISTS ac_quarter_snapshots (
+      entity_id TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      energy_entity_id TEXT NOT NULL,
+      reading_temp REAL,
+      target_temp REAL,
+      energy REAL,
+      day TEXT NOT NULL,
+      slot_key TEXT NOT NULL,
+      PRIMARY KEY (entity_id, slot_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_ac_quarter_slot ON ac_quarter_snapshots (slot_key);
   `);
+}
+
+function storeTable(store) {
+  if (store === "midnight") return "midnight_snapshots";
+  if (store === "hourly") return "hourly_snapshots";
+  return "snapshots";
 }
 
 function migrateJsonIfNeeded(db) {
@@ -77,13 +117,15 @@ export function listRowsFrom(db, dayKey) {
     .map(toRow);
 }
 
-export function hasDay(db, dayKey) {
-  return Boolean(db.prepare("SELECT 1 FROM snapshots WHERE day_key = ? LIMIT 1").get(dayKey));
+export function hasDay(db, dayKey, store = "morning") {
+  const table = storeTable(store);
+  return Boolean(db.prepare(`SELECT 1 FROM ${table} WHERE day_key = ? LIMIT 1`).get(dayKey));
 }
 
-export function insertRows(db, rows) {
+export function insertRows(db, rows, store = "morning") {
+  const table = storeTable(store);
   const stmt = db.prepare(
-    `INSERT OR REPLACE INTO snapshots (table_name, device_name, entity_id, energy, day, day_key)
+    `INSERT OR REPLACE INTO ${table} (table_name, device_name, entity_id, energy, day, day_key)
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   db.exec("BEGIN");
@@ -125,4 +167,35 @@ export function lastEnergyBefore(db, entityId, dayKey) {
     )
     .get(entityId, dayKey);
   return row?.energy ?? null;
+}
+
+export function hasAcSlot(db, slotKey) {
+  return Boolean(db.prepare("SELECT 1 FROM ac_quarter_snapshots WHERE slot_key = ? LIMIT 1").get(slotKey));
+}
+
+export function insertAcRows(db, rows) {
+  const stmt = db.prepare(
+    `INSERT OR REPLACE INTO ac_quarter_snapshots
+      (entity_id, device_name, energy_entity_id, reading_temp, target_temp, energy, day, slot_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  db.exec("BEGIN");
+  try {
+    for (const row of rows) {
+      stmt.run(
+        row.entityId,
+        row.deviceName,
+        row.energyEntityId,
+        row.readingTemp,
+        row.targetTemp,
+        row.energy,
+        row.day,
+        row.slotKey,
+      );
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
 }

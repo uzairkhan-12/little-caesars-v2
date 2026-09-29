@@ -9,6 +9,7 @@ import { LanguageToggle, useI18n, type MessageKey } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import primewaveLogo from "@/assets/primewave-logo.png?url";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
+import littleCaesarsLogoDark from "@/components/little-caesars-logo-black-text.png?url";
 
 const allTabs: Array<{ to: string; labelKey: MessageKey; exact?: boolean; adminOnly?: boolean; employeeOnly?: boolean }> = [
   { to: "/", labelKey: "navOverview", exact: true, adminOnly: true },
@@ -58,7 +59,11 @@ export function Header() {
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-10 h-14 sm:h-16 flex items-center gap-3">
         <Link to="/" aria-label={t("navOverview")} className="shrink-0">
-          <img src={littleCaesarsLogo} alt="Little Caesars" className="h-8 sm:h-10 w-auto object-contain" />
+          <img
+            src={theme === "dark" ? littleCaesarsLogo : littleCaesarsLogoDark}
+            alt="Little Caesars"
+            className="h-8 sm:h-10 w-auto object-contain"
+          />
         </Link>
 
         {showNav && (

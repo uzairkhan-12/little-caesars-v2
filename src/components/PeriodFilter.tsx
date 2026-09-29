@@ -61,7 +61,6 @@ function formatRangeLabel(start: string, end: string, t: TFunction, dateLocale: 
 }
 
 const PRESET_KEYS: Record<string, MessageKey> = {
-  all: "presetAll",
   today: "presetToday",
   "7d": "preset7d",
   "this-month": "presetThisMonth",
@@ -72,7 +71,6 @@ const PRESET_KEYS: Record<string, MessageKey> = {
 function presetsFor(today: Date): Array<{ id: string; start: string; end: string }> {
   const todayKey = toKey(today);
   return [
-    { id: "all", start: "", end: "" },
     { id: "today", start: todayKey, end: todayKey },
     { id: "7d", start: toKey(subDays(today, 6)), end: todayKey },
     { id: "this-month", start: toKey(startOfMonth(today)), end: todayKey },
@@ -83,7 +81,7 @@ function presetsFor(today: Date): Array<{ id: string; start: string; end: string
 
 function activePresetId(value: PeriodValue, today: Date) {
   const list = presetsFor(today);
-  return list.find((p) => p.start === value.start && p.end === value.end)?.id ?? (value.start || value.end ? "custom" : "all");
+  return list.find((p) => p.start === value.start && p.end === value.end)?.id ?? (value.start || value.end ? "custom" : "");
 }
 
 export function usePeriodLabel() {
@@ -243,7 +241,7 @@ export function PeriodFilter({
               variant="outline"
               className={cn(
                 "h-11 justify-between bg-input border-border font-normal",
-                presetId === "custom" || (presetId !== "all" && !selectedMonth && value.start) ? "text-foreground" : "text-muted-foreground",
+                presetId === "custom" || (!selectedMonth && value.start) ? "text-foreground" : "text-muted-foreground",
               )}
             >
               <span className="truncate">

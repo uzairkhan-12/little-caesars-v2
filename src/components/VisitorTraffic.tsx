@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Activity, ArrowUpRight } from "lucide-react";
 import { getDaily, getHourlyByDay, getHourlyByDow, getSummary } from "@/lib/lc.functions";
 import { useI18n } from "@/lib/i18n";
+import { CHART_BLUE } from "@/lib/chart-colors";
 import { formatHour12 } from "@/lib/utils";
 
 const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -196,8 +197,8 @@ function HourlyChart({
               <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
                 <BarTip label={formatHour12(h.hour, lang)} value={h.entries} />
                 <div
-                  className="w-4 max-w-full rounded-t bg-primary group-hover:brightness-110"
-                  style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%` }}
+                  className="w-4 max-w-full rounded-t group-hover:brightness-110"
+                  style={{ height: `${h.entries ? Math.max(scale(h.entries), 3) : 0}%`, background: CHART_BLUE }}
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums whitespace-nowrap">
@@ -208,7 +209,7 @@ function HourlyChart({
         })}
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-primary" /> {t("customersEntered")}</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: CHART_BLUE }} /> {t("customersEntered")}</span>
       </div>
     </div>
   );
@@ -250,8 +251,8 @@ function DailyChart({
               <div className="relative w-full flex-1 flex items-end justify-center cursor-default">
                 <BarTip label={label} value={d.entries} />
                 <div
-                  className="w-full max-w-5 rounded-t bg-primary/85 group-hover:bg-primary transition-colors"
-                  style={{ height: `${d.entries ? Math.max(h, 3) : 0}%` }}
+                  className="w-full max-w-5 rounded-t group-hover:brightness-110"
+                  style={{ height: `${d.entries ? Math.max(h, 3) : 0}%`, background: CHART_BLUE }}
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums">

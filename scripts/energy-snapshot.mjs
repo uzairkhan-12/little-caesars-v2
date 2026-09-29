@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Daily 6:00 AM Asia/Riyadh energy snapshot.
- * Runs independently of the dashboard (use OS cron).
+ * Daily energy snapshot. Runs independently of the dashboard (use OS cron).
+ * Default: 6:00 AM energy day, stored in `snapshots`.
+ * `midnight`: 12:00 AM calendar day, stored in `midnight_snapshots`.
+ * `hourly`: top of each hour, stored in `hourly_snapshots` (day_key is YYYY-MM-DDTHH).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -51,6 +53,31 @@ function loadEnv() {
   }
 }
 
+function riyadhCalendarKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function riyadhHourKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = String(Number(get("hour")) % 24).padStart(2, "0");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}`;
+}
+
 function riyadhDayKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: TZ,
@@ -82,6 +109,8 @@ function parseEnergy(state) {
 }
 
 async function main() {
+  const arg = process.argv[2];
+  const slot = arg === "midnight" || arg === "hourly" ? arg : "morning";
   loadEnv();
   const url = (process.env.HOME_ASSISTANT_URL ?? "").replace(/\/+$/, "");
   const token = process.env.HOME_ASSISTANT_TOKEN;
@@ -89,9 +118,9 @@ async function main() {
 
   const db = openEnergyDb();
   const now = new Date();
-  const dayKey = riyadhDayKey(now);
-  if (hasDay(db, dayKey)) {
-    console.log(`[energy-snapshot] already stored for ${dayKey}, skipping`);
+  const dayKey = slot === "midnight" ? riyadhCalendarKey(now) : slot === "hourly" ? riyadhHourKey(now) : riyadhDayKey(now);
+  if (hasDay(db, dayKey, slot)) {
+    console.log(`[energy-snapshot] ${slot} already stored for ${dayKey}, skipping`);
     return;
   }
 
@@ -116,8 +145,10 @@ async function main() {
     dayKey,
   }));
 
-  insertRows(db, inserted);
-  console.log(`[energy-snapshot] stored ${inserted.length} rows for energy-day ${dayKey} (6:00 AM)`);
+  insertRows(db, inserted, slot);
+  const label = slot === "midnight" ? "12:00 AM" : slot === "hourly" ? "hourly" : "6:00 AM";
+  const kind = slot === "midnight" ? "calendar-day" : slot === "hourly" ? "hour" : "energy-day";
+  console.log(`[energy-snapshot] stored ${inserted.length} rows for ${kind} ${dayKey} (${label})`);
 }
 
 main().catch((err) => {

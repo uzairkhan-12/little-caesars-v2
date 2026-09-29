@@ -9,8 +9,8 @@ export const REPORT_TABLE_LABELS: Record<ReportTable, string> = {
   chiller: "Chiller",
 };
 
-/** SEC mockup tariff used for Energy cost (SAR / kWh). */
-export const ENERGY_SAR_PER_KWH = 0.2;
+/** Tariff used for energy cost (SAR / kWh). */
+export const ENERGY_SAR_PER_KWH = 0.32;
 
 /** Devices snapshotted at 6:00 AM Asia/Riyadh. Energy entity per device. */
 export const REPORT_DEVICES: Record<ReportTable, { name: string; entityId: string }[]> = {
@@ -44,6 +44,32 @@ export type EnergyReportRow = {
   consumption?: number | null;
   day: string;
   dayKey: string;
+};
+
+/** Climate unit plus the energy-monitor channel that measures it. */
+export const AC_UNITS = [
+  { name: "Kitchen Area", climateId: "climate.kitchen_area", energyId: "sensor.ac_energy_monitor_energy1_ch1_energy" },
+  { name: "Office Area", climateId: "climate.office_area", energyId: "sensor.ac_energy_monitor_energy1_ch2_energy" },
+  { name: "Oven Area", climateId: "climate.oven_area", energyId: "sensor.ac_energy_monitor_energy1_ch3_energy" },
+  { name: "Sheeter Area", climateId: "climate.sheeter_area", energyId: "sensor.ac_energy_monitor_energy1_ch4_energy" },
+  { name: "Right Dining Area", climateId: "climate.dining_area_right", energyId: "sensor.ac_energy_monitor_energy1_ch6_energy" },
+  { name: "Left Dining Area", climateId: "climate.dining_area_left", energyId: "sensor.ac_energy_monitor_energy1_ch7_energy" },
+] as const;
+
+export type AcQuarterRow = {
+  deviceName: string;
+  /** Climate entity. */
+  entityId: string;
+  energyEntityId: string;
+  readingTemp: number | null;
+  targetTemp: number | null;
+  /** Lifetime meter reading at this sample. */
+  energy: number | null;
+  /** kWh used until the next 15-minute sample. */
+  consumption?: number | null;
+  day: string;
+  /** `YYYY-MM-DDTHH:MM` in Asia/Riyadh, floored to 15 minutes. */
+  slotKey: string;
 };
 
 /** Extra sensors stored at 6:00 AM so Home can subtract them for today's totals. */
@@ -97,6 +123,63 @@ export function riyadhEnergyDayKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+/** Calendar date in Asia/Riyadh (YYYY-MM-DD), including the hours before 6:00 AM. */
+export function riyadhCalendarDayKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Hour slot in Asia/Riyadh, `YYYY-MM-DDTHH`. */
+export function riyadhHourKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = String(Number(get("hour")) % 24).padStart(2, "0");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}`;
+}
+
+/** Start of the current hour in Asia/Riyadh. */
+export function riyadhHourStart(date = new Date()) {
+  const [day, hourStr] = riyadhHourKey(date).split("T");
+  const utc = new Date(`${day}T00:00:00.000Z`);
+  utc.setUTCHours(Number(hourStr) - RIYADH_OFFSET_HOURS);
+  return utc;
+}
+
+/** True when HA has not pushed a new reading since this hour started. */
+export function isHourMeterStale(lastUpdated: string | undefined, date = new Date()) {
+  if (!lastUpdated) return false;
+  const t = Date.parse(lastUpdated);
+  if (!Number.isFinite(t)) return false;
+  return t < riyadhHourStart(date).getTime() - 60_000;
+}
+
+/** 12:00 AM Asia/Riyadh of the current calendar day. */
+export function riyadhCalendarDayStart(date = new Date()) {
+  const key = riyadhCalendarDayKey(date);
+  return new Date(`${addCalendarKey(key, -1)}T21:00:00.000Z`);
+}
+
+/** True when HA has not pushed a new reading since this calendar day started. */
+export function isMidnightMeterStale(lastUpdated: string | undefined, date = new Date()) {
+  if (!lastUpdated) return false;
+  const t = Date.parse(lastUpdated);
+  if (!Number.isFinite(t)) return false;
+  return t < riyadhCalendarDayStart(date).getTime() - 60_000;
+}
+
 /** 6:00 AM Asia/Riyadh of the current energy day. */
 export function riyadhEnergyDayStart(date = new Date()) {
   const key = riyadhEnergyDayKey(date);
@@ -133,6 +216,85 @@ export function addCalendarKey(dayKey: string, delta: number) {
   return `${year}-${month}-${day}`;
 }
 
+/** Quarter-hour slot in Asia/Riyadh, `YYYY-MM-DDTHH:MM`. */
+export function riyadhQuarterKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = String(Number(get("hour")) % 24).padStart(2, "0");
+  const minute = String(Math.floor(Number(get("minute")) / 15) * 15).padStart(2, "0");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${minute}`;
+}
+
+/** `YYYY-MM-DDTHH:MM` plus `steps` quarter-hours. */
+export function addQuarterKey(slotKey: string, steps: number) {
+  const [date, hm] = slotKey.split("T");
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = hm.split(":").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, hh, mm + steps * 15));
+  const year = dt.getUTCFullYear();
+  const month = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(dt.getUTCDate()).padStart(2, "0");
+  const h = String(dt.getUTCHours()).padStart(2, "0");
+  const min = String(dt.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${h}:${min}`;
+}
+
+/** kWh for each 15-minute sample is the next sample's meter minus this one. A missed quarter stays blank. */
+export function withQuarterConsumption(rows: AcQuarterRow[]): AcQuarterRow[] {
+  const byDevice = new Map<string, AcQuarterRow[]>();
+  for (const row of rows) {
+    const list = byDevice.get(row.entityId) ?? [];
+    list.push(row);
+    byDevice.set(row.entityId, list);
+  }
+  const out: AcQuarterRow[] = [];
+  for (const list of byDevice.values()) {
+    list.sort((a, b) => a.slotKey.localeCompare(b.slotKey) || a.day.localeCompare(b.day));
+    const unique: AcQuarterRow[] = [];
+    const seen = new Set<string>();
+    for (const row of list) {
+      if (seen.has(row.slotKey)) continue;
+      seen.add(row.slotKey);
+      unique.push(row);
+    }
+    for (let i = 0; i < unique.length; i++) {
+      const row = unique[i];
+      const next = unique[i + 1];
+      const start = row.energy;
+      const end = next?.energy;
+      const consecutive =
+        next != null &&
+        next.slotKey === addQuarterKey(row.slotKey, 1) &&
+        start != null &&
+        end != null &&
+        end >= start;
+      const consumption = consecutive && start != null && end != null ? Math.max(0, +(end - start).toFixed(6)) : null;
+      out.push({ ...row, consumption });
+    }
+  }
+  return out.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.deviceName.localeCompare(b.deviceName)));
+}
+
+/** `YYYY-MM-DDTHH` plus `delta` hours. Riyadh has no DST, so this is plain clock arithmetic. */
+export function addHourKey(hourKey: string, delta: number) {
+  const [date, hour] = hourKey.split("T");
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, Number(hour) + delta));
+  const year = dt.getUTCFullYear();
+  const month = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(dt.getUTCDate()).padStart(2, "0");
+  const h = String(dt.getUTCHours()).padStart(2, "0");
+  return `${year}-${month}-${day}T${h}`;
+}
+
 function sortReadings(rows: EnergyReportRow[]) {
   return [...rows].sort(
     (a, b) => a.dayKey.localeCompare(b.dayKey) || a.day.localeCompare(b.day) || a.entityId.localeCompare(b.entityId),
@@ -157,8 +319,11 @@ function lastReadingPerDay(rows: EnergyReportRow[]): EnergyReportRow[] {
   return [...map.values()];
 }
 
-/** One row per device per day, with that day's consumption (meter today minus meter yesterday). */
-export function withDailyConsumption(rows: EnergyReportRow[]): EnergyReportRow[] {
+/** One row per device per slot. Consumption is the next consecutive slot minus this one. */
+export function withDailyConsumption(
+  rows: EnergyReportRow[],
+  nextKey: (key: string) => string = (key) => addCalendarKey(key, 1),
+): EnergyReportRow[] {
   const starts = firstReadingPerDay(rows);
   const endByKey = new Map(
     lastReadingPerDay(rows).map((r) => [`${r.entityId}|${r.dayKey}`, r] as const),
@@ -178,7 +343,7 @@ export function withDailyConsumption(rows: EnergyReportRow[]): EnergyReportRow[]
       const start = row.energy;
       const consecutive =
         next != null &&
-        next.dayKey === addCalendarKey(row.dayKey, 1) &&
+        next.dayKey === nextKey(row.dayKey) &&
         start != null &&
         next.energy != null &&
         next.energy >= start;

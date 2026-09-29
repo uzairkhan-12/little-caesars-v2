@@ -4,11 +4,29 @@ import {
   isReportDevice,
   REPORT_DEVICES,
   REPORT_TABLES,
+  addHourKey,
+  riyadhCalendarDayKey,
+  riyadhHourKey,
+  riyadhQuarterKey,
   withDailyConsumption,
+  withQuarterConsumption,
   type EnergyReportRow,
   type ReportTable,
 } from "./energy-devices";
-import { hasSnapshotDay, insertSnapshotRows, listEntityIds, listSnapshotRows, openEnergyDb, pickBaselineEnergy } from "./energy-db";
+import {
+  hasSnapshotDay,
+  insertSnapshotRows,
+  acQuarterBaseline,
+  hourlyBaselineEnergy,
+  listAcQuarterRows,
+  listEntityIds,
+  listHourlySnapshotRows,
+  listMidnightSnapshotRows,
+  listSnapshotRows,
+  midnightBaselineEnergy,
+  openEnergyDb,
+  pickBaselineEnergy,
+} from "./energy-db";
 
 const TZ = "Asia/Riyadh";
 const RESET_HOUR = 6;
@@ -111,11 +129,46 @@ export async function snapshotEnergyReports() {
   });
 }
 
-export async function listEnergyReports(table: ReportTable): Promise<EnergyReportRow[]> {
+export async function listEnergyReports(table?: ReportTable): Promise<EnergyReportRow[]> {
   const todayKey = riyadhDayKey();
   return withDailyConsumption(listSnapshotRows(table).filter((r) => isReportDevice(r.entityId))).filter(
     (r) => r.dayKey !== todayKey && r.consumption != null,
   );
+}
+
+/** Closed midnight-to-midnight days. Today's 12:00 AM reading is the open baseline, not a closed row. */
+export async function listMidnightEnergyReports(table?: ReportTable): Promise<EnergyReportRow[]> {
+  const todayKey = riyadhCalendarDayKey();
+  return withDailyConsumption(listMidnightSnapshotRows(table).filter((r) => isReportDevice(r.entityId))).filter(
+    (r) => r.dayKey !== todayKey && r.consumption != null,
+  );
+}
+
+export async function getMidnightBaselines(): Promise<Record<string, number>> {
+  return midnightBaselineEnergy(riyadhCalendarDayKey());
+}
+
+/** Closed hours. The current hour's reading is the open baseline, not a closed row. */
+export async function listHourlyEnergyReports(table?: ReportTable): Promise<EnergyReportRow[]> {
+  const hourKey = riyadhHourKey();
+  return withDailyConsumption(
+    listHourlySnapshotRows(table).filter((r) => isReportDevice(r.entityId)),
+    (key) => addHourKey(key, 1),
+  ).filter((r) => r.dayKey !== hourKey && r.consumption != null);
+}
+
+export async function getHourlyBaselines(): Promise<Record<string, number>> {
+  return hourlyBaselineEnergy(riyadhHourKey());
+}
+
+/** Closed 15-minute AC intervals. The current slot is the open baseline. */
+export async function listAcQuarterReports() {
+  const slotKey = riyadhQuarterKey();
+  return withQuarterConsumption(listAcQuarterRows()).filter((row) => row.slotKey !== slotKey && row.consumption != null);
+}
+
+export async function getAcQuarterBaselines(): Promise<Record<string, { energy: number | null }>> {
+  return acQuarterBaseline(riyadhQuarterKey());
 }
 
 export async function getEnergyBaselines(): Promise<Record<string, number>> {
@@ -251,7 +304,11 @@ function overviewFromDays(todayKey: string, allDays: EnergyDayPoint[], extra: { 
   const projected = throughDay ? (monthCurrent / throughDay) * dim : null;
   const tariffSarPerKwh = ENERGY_SAR_PER_KWH;
   const costSar = monthCurrent * tariffSarPerKwh;
-  const savedVsYearSar = yearPrevious != null ? (yearPrevious - monthCurrent) * tariffSarPerKwh : null;
+  const savedParts = [monthPrevious, yearPrevious]
+    .filter((n): n is number => n != null)
+    .map((baseline) => baseline - monthCurrent);
+  const savedAvgKwh = savedParts.length ? savedParts.reduce((sum, n) => sum + n, 0) / savedParts.length : null;
+  const savedVsYearSar = savedAvgKwh != null ? savedAvgKwh * tariffSarPerKwh : null;
 
   const mtdCats = throughDay ? sumCatsRange(allDays, `${thisMonth}-01`, mtdTo) : emptyCats();
   const prevCats = throughDay ? sumCatsRange(allDays, `${prevMonth}-01`, prevTo) : emptyCats();
@@ -264,14 +321,21 @@ function overviewFromDays(todayKey: string, allDays: EnergyDayPoint[], extra: { 
   }
 
   const yearMonths: EnergyMonthBar[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const ym = shiftMonth(thisMonth, -i);
+  const chartYear = thisMonth.slice(0, 4);
+  for (let month = 1; month <= 12; month++) {
+    const ym = `${chartYear}-${String(month).padStart(2, "0")}`;
+    const future = ym > thisMonth;
     const partial = ym === thisMonth;
-    const to = partial && throughDay ? clampToMonthDay(ym, throughDay) : `${ym}-${String(daysInMonth(ym)).padStart(2, "0")}`;
-    const cats = sumCatsRange(allDays, `${ym}-01`, to);
     const prevYm = lastYearMonth(ym);
     const prevEnd = partial && throughDay ? clampToMonthDay(prevYm, throughDay) : `${prevYm}-${String(daysInMonth(prevYm)).padStart(2, "0")}`;
     const prev = sumCatsRange(allDays, `${prevYm}-01`, prevEnd);
+    const cats = future
+      ? emptyCats()
+      : sumCatsRange(
+          allDays,
+          `${ym}-01`,
+          partial && throughDay ? clampToMonthDay(ym, throughDay) : `${ym}-${String(daysInMonth(ym)).padStart(2, "0")}`,
+        );
     yearMonths.push({
       month: ym,
       label: monthShort(ym),
@@ -400,13 +464,6 @@ function daysInMonth(ym: string) {
 function clampToMonthDay(ym: string, day: number) {
   const d = Math.min(Math.max(day, 1), daysInMonth(ym));
   return `${ym}-${String(d).padStart(2, "0")}`;
-}
-
-function shiftMonth(ym: string, delta: number) {
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7));
-  const dt = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 function monthShort(ym: string) {

@@ -529,6 +529,7 @@ function Home() {
               <CameraTile
                 key={c.entity_id}
                 name={known(c.attributes.friendly_name ?? c.entity_id)}
+                rawName={String(c.attributes.friendly_name ?? c.entity_id)}
                 src={`/api/camera/${c.entity_id}?stream=1`}
               />
             ))}
@@ -1160,8 +1161,25 @@ function ClimateCard({
   );
 }
 
-function CameraTile({ name, src }: { name: string; src: string }) {
+function cameraMark(rawName: string): "cashier" | "hide" | null {
+  const name = rawName.toLowerCase();
+  if (name.includes("cashier") || name.includes("counter")) return "cashier";
+  if (name.includes("dining")) return "hide";
+  return null;
+}
+
+function CameraCaption({ mark }: { mark: "cashier" | "hide" | null }) {
+  if (!mark) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-black flex items-center justify-center">
+      {mark === "cashier" ? <span className="text-white text-sm font-medium tracking-wide">Cashier</span> : null}
+    </div>
+  );
+}
+
+function CameraTile({ name, rawName, src }: { name: string; rawName: string; src: string }) {
   const { t } = useI18n();
+  const mark = cameraMark(rawName);
   const [full, setFull] = useState(false);
   const [error, setError] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -1278,6 +1296,7 @@ function CameraTile({ name, src }: { name: string; src: string }) {
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors grid place-items-center">
                 <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
               </div>
+              <CameraCaption mark={mark} />
             </>
           )}
         </button>
@@ -1305,17 +1324,20 @@ function CameraTile({ name, src }: { name: string; src: string }) {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={liveSrc}
-              alt={name}
-              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
-              onError={() => setError(true)}
-              onLoad={() => {
-                setError(false);
-                lastFrameAtRef.current = Date.now();
-              }}
-            />
+          <div className="relative flex-1 grid place-items-center p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="relative">
+              <img
+                src={liveSrc}
+                alt={name}
+                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                onError={() => setError(true)}
+                onLoad={() => {
+                  setError(false);
+                  lastFrameAtRef.current = Date.now();
+                }}
+              />
+              <CameraCaption mark={mark} />
+            </div>
           </div>
         </div>
       )}

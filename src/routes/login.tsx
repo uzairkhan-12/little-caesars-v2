@@ -5,7 +5,9 @@ import { useState } from "react";
 import { Lock, User, Loader2 } from "lucide-react";
 import { login } from "@/lib/gate.functions";
 import { LanguageToggle, useI18n } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
 import littleCaesarsLogo from "@/assets/little-caesars-logo.png?url";
+import littleCaesarsLogoDark from "@/components/little-caesars-logo-black-text.png?url";
 
 type Search = { redirect?: string };
 
@@ -25,6 +27,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { t } = useI18n();
+  const { theme } = useTheme();
 
   const mutation = useMutation({
     mutationFn: (v: { username: string; password: string }) => loginFn({ data: v }),
@@ -51,7 +54,11 @@ function LoginPage() {
 
       <div className="relative w-full max-w-md">
         <div className="flex items-center justify-center mb-8">
-          <img src={littleCaesarsLogo} alt="Little Caesars" className="h-16 w-auto object-contain" />
+          <img
+            src={theme === "dark" ? littleCaesarsLogo : littleCaesarsLogoDark}
+            alt="Little Caesars"
+            className="h-16 w-auto object-contain"
+          />
         </div>
 
         <div className="rounded-3xl border border-border bg-gradient-card shadow-soft p-8">

@@ -1,4 +1,7 @@
 import "./lib/error-capture";
+import { startEnergyCollector } from "./energy-collector";
+
+startEnergyCollector();
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
