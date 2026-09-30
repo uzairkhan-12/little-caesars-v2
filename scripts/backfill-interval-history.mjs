@@ -1,5 +1,5 @@
 /**
- * Fill hourly meter readings and 15-minute AC samples from Home Assistant history.
+ * Fill hourly meter readings and 15-minute AC samples from system history.
  * The live cron never recorded these, so the reports had nothing to show.
  */
 import fs from "node:fs";

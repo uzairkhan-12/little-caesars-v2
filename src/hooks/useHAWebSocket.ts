@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { HAState } from "@/lib/ha.functions";
 
 /**
- * Connects to the server-side Home Assistant WebSocket proxy and pushes
+ * Connects to the server-side system WebSocket proxy and pushes
  * live state changes into the React Query cache used by the app so any UI
  * bound to ["ha", "states"] updates instantly.
  */

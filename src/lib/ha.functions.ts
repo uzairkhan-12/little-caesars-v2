@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 function haFetch(path: string, init?: RequestInit) {
   const url = process.env.HOME_ASSISTANT_URL;
   const token = process.env.HOME_ASSISTANT_TOKEN;
-  if (!url || !token) throw new Error("Home Assistant is not configured");
+  if (!url || !token) throw new Error("The system is not configured");
   return fetch(`${url}${path}`, {
     ...init,
     headers: {

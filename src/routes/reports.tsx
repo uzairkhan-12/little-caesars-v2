@@ -1,12 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 import { Shell } from "@/components/Shell";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TFunction } from "@/lib/i18n";
 import { cn, formatHour12 } from "@/lib/utils";
 import { PeriodFilter, usePeriodLabel, type PeriodValue } from "@/components/PeriodFilter";
 import { getGateStatus } from "@/lib/gate.functions";
@@ -462,6 +462,12 @@ function ReportsPage() {
     if (acPage !== safeAcPage) setAcPage(safeAcPage);
   }, [acPage, safeAcPage]);
 
+  useEffect(() => {
+    if (view === "ac" && deviceId !== "all" && !AC_UNITS.some((unit) => unit.energyId === deviceId)) {
+      setDeviceId("all");
+    }
+  }, [view, deviceId]);
+
   const changeTable = (next: string) => {
     if (next !== "all" && !(REPORT_TABLES as readonly string[]).includes(next)) return;
     setTable(next as LoadFilter);
@@ -485,7 +491,16 @@ function ReportsPage() {
 
   return (
     <Shell title={t("navReports")}>
-      <Tabs value={view} onValueChange={(next) => setView(next as ReportView)}>
+      <Tabs
+        value={view}
+        onValueChange={(next) => {
+          const picked = next as ReportView;
+          setView(picked);
+          if (picked === "ac" && deviceId !== "all" && !AC_UNITS.some((unit) => unit.energyId === deviceId)) {
+            setDeviceId("all");
+          }
+        }}
+      >
         <TabsList className="h-auto flex-wrap bg-card/70 border border-border p-1">
           <TabsTrigger value="six" className="text-sm px-4 py-2">
             {t("reportViewSix")}
@@ -498,53 +513,67 @@ function ReportsPage() {
           </TabsTrigger>
           <TabsTrigger value="ac" className="text-sm px-4 py-2">
             {t("acLog")}
-          </TabsTrigger>
+            </TabsTrigger>
         </TabsList>
 
       <div className="mt-4 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
         <div className="flex flex-col gap-5">
           <Field label={t("load")}>
             <div className="flex flex-wrap gap-1 rounded-lg bg-background/50 border border-border p-1 w-fit">
-              <button
-                type="button"
-                onClick={() => changeTable("all")}
-                className={`rounded-md px-3 py-1.5 text-xs uppercase tracking-wider ${table === "all" ? "bg-background text-foreground shadow" : "text-muted-foreground"}`}
-              >
-                {t("allDevices")}
-              </button>
-              {REPORT_TABLES.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => changeTable(id)}
-                  className={`rounded-md px-3 py-1.5 text-xs uppercase tracking-wider ${table === id ? "bg-background text-foreground shadow" : "text-muted-foreground"}`}
-                >
-                  {known(REPORT_TABLE_LABELS[id])}
+              {view === "ac" ? (
+                <button type="button" className="rounded-md px-3 py-1.5 text-xs uppercase tracking-wider bg-background text-foreground shadow">
+                  {known(REPORT_TABLE_LABELS.ac)}
                 </button>
-              ))}
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => changeTable("all")}
+                    className={`rounded-md px-3 py-1.5 text-xs uppercase tracking-wider ${table === "all" ? "bg-background text-foreground shadow" : "text-muted-foreground"}`}
+                  >
+                    {t("allDevices")}
+                  </button>
+                  {REPORT_TABLES.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => changeTable(id)}
+                      className={`rounded-md px-3 py-1.5 text-xs uppercase tracking-wider ${table === id ? "bg-background text-foreground shadow" : "text-muted-foreground"}`}
+                    >
+                      {known(REPORT_TABLE_LABELS[id])}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </Field>
-          <div className="flex flex-col xl:flex-row xl:items-start gap-5">
+        <div className="flex flex-col xl:flex-row xl:items-start gap-5">
           <Field label={t("device")}>
             <Select value={deviceId} onValueChange={setDeviceId}>
               <SelectTrigger className="bg-input border-border text-foreground w-full sm:w-80 [&_svg]:text-foreground [&_svg]:opacity-100">
                 <SelectValue placeholder={t("allDevices")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t("allDevices")}</SelectItem>
-                {devices.map((d) => (
-                  <SelectItem key={d.entityId} value={d.entityId}>
-                    {deviceLabel(d, table, known)}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">{view === "ac" ? t("allAc") : t("allDevices")}</SelectItem>
+                {view === "ac"
+                  ? AC_UNITS.map((unit) => (
+                      <SelectItem key={unit.energyId} value={unit.energyId}>
+                        {known(unit.name)}
+                      </SelectItem>
+                    ))
+                  : devices.map((d) => (
+                      <SelectItem key={d.entityId} value={d.entityId}>
+                        {deviceLabel(d, table, known)}
+                      </SelectItem>
+                    ))}
               </SelectContent>
             </Select>
           </Field>
           {view !== "hourly" ? (
-            <div className="flex-1 space-y-1.5 min-w-0">
+          <div className="flex-1 space-y-1.5 min-w-0">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("period")}</Label>
-              <PeriodFilter value={period} onChange={setPeriod} months={months} />
-            </div>
+            <PeriodFilter value={period} onChange={setPeriod} months={months} />
+          </div>
           ) : null}
           <div className="flex xl:flex-col justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
@@ -552,8 +581,8 @@ function ReportsPage() {
             </Button>
           </div>
         </div>
-        </div>
       </div>
+        </div>
 
         <TabsContent value="six">
           <ReadingsTable
@@ -666,6 +695,59 @@ function ReportsPage() {
   );
 }
 
+function readingDay(row: ReportRow, t: TFunction, locale: string) {
+  if (!row.live) return formatDay(row.day, locale);
+  return row.stale ? t("meterLastUpdated", { day: formatDay(row.day, locale) }) : t("soFar", { day: formatDay(row.day, locale) });
+}
+
+function ReadingRow({ row, nested }: { row: ReportRow; nested?: boolean }) {
+  const { t, locale, known } = useI18n();
+  return (
+    <TableRow>
+      <TableCell className={`px-5 font-medium ${nested ? "ps-12" : ""}`}>{known(row.deviceName)}</TableCell>
+      <TableCell className="px-5 tabular-nums font-semibold">
+        {row.consumption == null ? "—" : `${row.consumption.toFixed(2)} kWh`}
+      </TableCell>
+      <TableCell className="px-5 text-muted-foreground tabular-nums">{readingDay(row, t, locale)}</TableCell>
+    </TableRow>
+  );
+}
+
+function GroupedReadings({ rows }: { rows: ReportRow[] }) {
+  const { known } = useI18n();
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const groups = REPORT_TABLES.map((id) => ({
+    id,
+    rows: rows.filter((row) => row.table === id),
+  })).filter((group) => group.rows.length > 0);
+
+  return groups.map((group) => {
+    const expanded = open[group.id] === true;
+    const total = group.rows.reduce((sum, row) => sum + (row.consumption ?? 0), 0);
+    return (
+      <Fragment key={group.id}>
+        <TableRow className="bg-muted/40 hover:bg-muted/60">
+          <TableCell className="px-3 py-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 text-start"
+              onClick={() => setOpen((current) => ({ ...current, [group.id]: !expanded }))}
+              aria-expanded={expanded}
+            >
+              <ChevronDown className={`w-4 h-4 shrink-0 transition ${expanded ? "" : "-rotate-90 rtl:rotate-90"}`} />
+              <span className="font-medium">{known(REPORT_TABLE_LABELS[group.id])}</span>
+              <span className="text-xs text-muted-foreground">{group.rows.length}</span>
+            </button>
+          </TableCell>
+          <TableCell className="px-5 py-2 tabular-nums font-semibold">{total.toFixed(2)} kWh</TableCell>
+          <TableCell className="px-5 py-2" />
+        </TableRow>
+        {expanded ? group.rows.map((row) => <ReadingRow key={`${row.live ? "live" : row.dayKey}-${row.entityId}`} row={row} nested />) : null}
+      </Fragment>
+    );
+  });
+}
+
 function ReadingsTable({
   eyebrow,
   title,
@@ -715,13 +797,13 @@ function ReadingsTable({
 }) {
   const { t, locale, known } = useI18n();
   return (
-    <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft overflow-hidden">
+      <div className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft overflow-hidden">
       <div className="px-5 py-4 border-b border-border/60 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+          <div>
           {eyebrow ? <p className="text-[11px] uppercase tracking-[0.16em] text-accent">{eyebrow}</p> : null}
           <h2 className="font-display text-xl tracking-wider">{title}</h2>
           {hint ? <p className="text-xs text-muted-foreground mt-1">{hint}</p> : null}
-          <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
             {count === 1 ? t("readingsOne", { count }) : t("readingsMany", { count })}
             {deviceName ? ` · ${deviceName}` : ""}
             {rangeHint ? ` · ${rangeHint}` : ""}
@@ -735,76 +817,64 @@ function ReadingsTable({
             {summary.extra ? <p className="text-xs text-muted-foreground">{summary.extra}</p> : null}
           </div>
         ) : null}
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
             <TableHead className="px-5">{t("deviceName")}</TableHead>
             <TableHead className="px-5">{t("consumption")}</TableHead>
             <TableHead className="px-5">{t("day")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
           {loading && (
-            <TableRow>
-              <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
                 {t("loading")}
-              </TableCell>
-            </TableRow>
-          )}
+                </TableCell>
+              </TableRow>
+            )}
           {error && (
-            <TableRow>
-              <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
                 {t("reportsError")}
-              </TableCell>
-            </TableRow>
-          )}
+                </TableCell>
+              </TableRow>
+            )}
           {!loading && !error && pageRows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={3} className="px-5 py-10 text-center text-muted-foreground">
                 {empty}
-              </TableCell>
-            </TableRow>
+                </TableCell>
+              </TableRow>
+            )}
+          {showLoad ? (
+            <GroupedReadings rows={pageRows} />
+          ) : (
+            pageRows.map((row) => <ReadingRow key={`${row.live ? "live" : row.dayKey}-${row.entityId}`} row={row} />)
           )}
-          {pageRows.map((row) => (
-            <TableRow key={`${row.live ? "live" : row.dayKey}-${row.entityId}`}>
-              <TableCell className="px-5 font-medium">
-                {showLoad ? `${known(REPORT_TABLE_LABELS[row.table])} · ${known(row.deviceName)}` : known(row.deviceName)}
-              </TableCell>
-              <TableCell className="px-5 tabular-nums font-semibold">
-                {row.consumption == null ? "—" : `${row.consumption.toFixed(2)} kWh`}
-              </TableCell>
-              <TableCell className="px-5 text-muted-foreground tabular-nums">
-                {row.live
-                  ? row.stale
-                    ? t("meterLastUpdated", { day: formatDay(row.day, locale) })
-                    : t("soFar", { day: formatDay(row.day, locale) })
-                  : formatDay(row.day, locale)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
+          </TableBody>
         {showFooter && (
-          <TableFooter>
-            <TableRow className="hover:bg-transparent">
+            <TableFooter>
+              <TableRow className="hover:bg-transparent">
               <TableCell className="px-5">{t("totalConsumptionRow")}</TableCell>
               <TableCell className="px-5 tabular-nums font-semibold text-accent">{formatKwh(periodEnergy, locale)}</TableCell>
               <TableCell className="px-5 text-muted-foreground">{footerHint}</TableCell>
-            </TableRow>
-          </TableFooter>
-        )}
-      </Table>
+              </TableRow>
+            </TableFooter>
+          )}
+        </Table>
 
-      <div className="px-5 py-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
+        <div className="px-5 py-4 border-t border-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
           {count === 0 ? t("noRows") : t("showingRows", { from, to, total: count })}
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="bg-input border-border"
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-input border-border"
             disabled={page <= 1}
             onClick={onPrev}
           >
@@ -1169,21 +1239,21 @@ function AcLogTable({
           <Button type="button" variant="outline" size="sm" className="bg-input border-border" disabled={page <= 1} onClick={onPrev}>
             <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
             {t("previous")}
-          </Button>
-          <span className="text-xs tabular-nums text-muted-foreground min-w-[7rem] text-center">
+            </Button>
+            <span className="text-xs tabular-nums text-muted-foreground min-w-[7rem] text-center">
             {t("pageOf", { page, pages: pageCount })}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="bg-input border-border"
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-input border-border"
             disabled={page >= pageCount}
             onClick={onNext}
-          >
+            >
             {t("next")}
             <ChevronRight className="w-4 h-4 rtl:rotate-180" />
-          </Button>
+            </Button>
         </div>
       </div>
     </section>

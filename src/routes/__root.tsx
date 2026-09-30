@@ -114,7 +114,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Live occupancy, lighting, climate, camera and traffic analytics — powered by Home Assistant and Frigate.",
+          "Live occupancy, lighting, climate, camera and traffic analytics — powered by the system and Frigate.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

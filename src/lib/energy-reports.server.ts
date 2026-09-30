@@ -80,7 +80,7 @@ function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
 async function fetchHaStates(): Promise<Array<{ entity_id: string; state: string }>> {
   const url = process.env.HOME_ASSISTANT_URL;
   const token = process.env.HOME_ASSISTANT_TOKEN;
-  if (!url || !token) throw new Error("Home Assistant is not configured");
+  if (!url || !token) throw new Error("The system is not configured");
   const res = await fetch(`${url.replace(/\/+$/, "")}/api/states`, {
     headers: {
       Authorization: `Bearer ${token}`,

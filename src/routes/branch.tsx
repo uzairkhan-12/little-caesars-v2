@@ -520,7 +520,7 @@ function Home() {
         </div>
       </section>
 
-      {/* Cameras row (Home Assistant proxy) */}
+      {/* Cameras row (system proxy) */}
       <section className="mt-10">
         <SectionHeader title={t("liveCameras")} hint={t("camerasOnline", { count: cameras.length })} />
         {cameras.length ? (

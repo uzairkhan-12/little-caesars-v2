@@ -64,13 +64,18 @@ const REGIONS: Array<{ id: "all" | "Riyadh" | "Jeddah" | "East"; labelKey: Messa
 ];
 type Region = (typeof REGIONS)[number]["id"];
 
-const BRANCHES = [
-  { id: "al-mughrizat", name: "Al Mughrizat, Riyadh", region: "Riyadh" as const, live: true },
-  { id: "hittin", name: "Hittin, Riyadh", region: "Riyadh" as const, live: false },
-  { id: "al-rawdah", name: "Al Rawdah, Jeddah", region: "Jeddah" as const, live: false },
-  { id: "al-faisaliyah", name: "Al Faisaliyah, Dammam", region: "East" as const, live: false },
-  { id: "al-olaya", name: "Al Olaya, Riyadh", region: "Riyadh" as const, live: false },
-  { id: "al-nakheel", name: "Al Nakheel, Riyadh", region: "Riyadh" as const, live: false },
+const BRANCHES: Array<{
+  id: string;
+  name: string;
+  region: "Riyadh" | "Jeddah" | "East";
+  live: boolean;
+}> = [
+  { id: "al-mughrizat", name: "Al Mughrizat, Riyadh", region: "Riyadh", live: true },
+  { id: "hittin", name: "Hittin, Riyadh", region: "Riyadh", live: false },
+  { id: "al-rawdah", name: "Al Rawdah, Jeddah", region: "Jeddah", live: false },
+  { id: "al-faisaliyah", name: "Al Faisaliyah, Dammam", region: "East", live: false },
+  { id: "al-olaya", name: "Al Olaya, Riyadh", region: "Riyadh", live: false },
+  { id: "al-nakheel", name: "Al Nakheel, Riyadh", region: "Riyadh", live: false },
 ];
 
 function formatKwh(n: number, digits = 0, locale = "en-US") {
@@ -283,22 +288,6 @@ export function ChainKpiGrid({
       ? (lastMonthKwh + lastYearKwh) / 2
       : (lastMonthKwh ?? lastYearKwh);
   const avoidedPct = avgBaseline ? ((avgBaseline - monthKwh) / avgBaseline) * 100 : null;
-  const kwhText = (n: number) => n.toLocaleString(locale, { maximumFractionDigits: 1 });
-  const savingsFormula =
-    lastMonthKwh != null && lastYearKwh != null
-      ? t("savingsFormula", {
-          last: kwhText(lastMonthKwh),
-          year: kwhText(lastYearKwh),
-          now: kwhText(monthKwh),
-          rate: rate.toFixed(2),
-        })
-      : lastMonthKwh != null || lastYearKwh != null
-        ? t("savingsFormulaOne", {
-            base: kwhText((lastMonthKwh ?? lastYearKwh) as number),
-            now: kwhText(monthKwh),
-            rate: rate.toFixed(2),
-          })
-        : null;
   const month = known(monthLong(energy.todayKey, locale));
   const energySeries =
     range === "today" || range === "yesterday" || range === "week"
@@ -451,8 +440,6 @@ export function ChainKpiGrid({
         series={savedSeries}
       >
         <DeltaLine pct={avoidedPct} vs={avoidedPct == null ? t("needMoreDays", { vs: t("savingsOfAvg") }) : t("savingsOfAvg")} invert />
-        <p className="text-[11px] text-muted-foreground">{t("savingsBasis")}</p>
-        {savingsFormula ? <p className="text-[11px] text-muted-foreground tabular-nums leading-snug">{savingsFormula}</p> : null}
       </KpiCard>}
       {showBusiness && <KpiCard
         label={t("peakHour")}
@@ -497,20 +484,14 @@ export function BranchesBoard({
   const saved = savedKwhAvg != null ? savedKwhAvg * energy.tariffSarPerKwh : null;
   const vsAug = energy.month.changePct;
   const trend = energy.days.map((d) => d.total);
-
-  const rows = useMemo(() => {
-    return BRANCHES.filter((b) => region === "all" || b.region === region);
-  }, [region]);
+  const rows = useMemo(() => BRANCHES.filter((b) => region === "all" || b.region === region), [region]);
 
   return (
     <section className="mt-8 rounded-[22px] bg-gradient-card border border-border shadow-soft overflow-hidden">
       <div className="px-5 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-border/60">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-primary/20 text-primary grid place-items-center text-xs font-semibold">LC</span>
-            <h2 className="font-display text-2xl tracking-tight">{t("allBranches")}</h2>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">{t("branchesHint")}</p>
+        <div className="flex items-center gap-2">
+          <span className="w-7 h-7 rounded-lg bg-primary/20 text-primary grid place-items-center text-xs font-semibold">LC</span>
+          <h2 className="font-display text-2xl tracking-tight">{t("allBranches")}</h2>
         </div>
         <div className="flex flex-wrap gap-1 rounded-full bg-background/50 border border-border p-1">
           {REGIONS.map((item) => (
@@ -542,46 +523,31 @@ export function BranchesBoard({
             </tr>
           </thead>
           <tbody>
-            {rows.map((b) =>
-              b.live ? (
-                <tr key={b.id} className="border-b border-border/40">
-                  <td className="px-5 py-4 font-medium">{known(b.name)}</td>
-                  <td className="px-5 py-4 text-muted-foreground">{known(b.region)}</td>
-                  <td className="px-5 py-4 text-end tabular-nums">{kwhPerCust == null ? "—" : kwhPerCust.toFixed(2)}</td>
-                  <td className="px-5 py-4 text-end tabular-nums">{formatKwh(kwh, 0, locale)}</td>
-                  <td className="px-5 py-4 text-end tabular-nums text-primary">
-                    {saved == null ? "—" : `${saved < 0 ? "−" : ""}${formatSar(saved, locale, money)}`}
-                  </td>
-                  <td className={`px-5 py-4 text-end tabular-nums ${vsAug == null ? "text-muted-foreground" : vsAug > 0 ? "text-warning" : "text-success"}`}>
-                    {vsAug == null ? "—" : `${vsAug > 0 ? "▲" : "▼"} ${Math.abs(vsAug).toFixed(0)}%`}
-                  </td>
-                  <td className="px-5 py-4">
-                    <Sparkline data={trend} color={CHART_BLUE} />
-                  </td>
-                  <td className="px-5 py-4 text-end">
+            {rows.map((b) => (
+              <tr key={b.id} className="border-b border-border/40">
+                <td className="px-5 py-4 font-medium">{known(b.name)}</td>
+                <td className="px-5 py-4 text-muted-foreground">{known(b.region)}</td>
+                <td className="px-5 py-4 text-end tabular-nums">{!b.live || kwhPerCust == null ? "—" : kwhPerCust.toFixed(2)}</td>
+                <td className="px-5 py-4 text-end tabular-nums">{b.live ? formatKwh(kwh, 0, locale) : "—"}</td>
+                <td className="px-5 py-4 text-end tabular-nums text-primary">
+                  {!b.live || saved == null ? "—" : `${saved < 0 ? "−" : ""}${formatSar(saved, locale, money)}`}
+                </td>
+                <td className={`px-5 py-4 text-end tabular-nums ${!b.live || vsAug == null ? "text-muted-foreground" : vsAug > 0 ? "text-warning" : "text-success"}`}>
+                  {!b.live || vsAug == null ? "—" : `${vsAug > 0 ? "▲" : "▼"} ${Math.abs(vsAug).toFixed(0)}%`}
+                </td>
+                <td className="px-5 py-4">{b.live ? <Sparkline data={trend} color={CHART_BLUE} /> : null}</td>
+                <td className="px-5 py-4 text-end">
+                  {b.live ? (
                     <Link
                       to="/branch"
                       className="inline-flex h-8 items-center rounded-full border border-accent/60 px-3 text-xs text-accent hover:bg-card/70"
                     >
                       {t("openBranch")}
                     </Link>
-                  </td>
-                </tr>
-              ) : (
-                <tr key={b.id} className="border-b border-border/40 text-muted-foreground">
-                  <td className="px-5 py-4 font-medium text-foreground/80">{known(b.name)}</td>
-                  <td className="px-5 py-4">{known(b.region)}</td>
-                  <td className="px-5 py-4 text-end">—</td>
-                  <td className="px-5 py-4 text-end">—</td>
-                  <td className="px-5 py-4 text-end">—</td>
-                  <td className="px-5 py-4 text-end">—</td>
-                  <td className="px-5 py-4">
-                    <Sparkline data={[0, 0, 0, 0]} color={CHART_BLUE} />
-                  </td>
-                  <td className="px-5 py-4 text-end text-xs">{t("notIntegrated")}</td>
-                </tr>
-              ),
-            )}
+                  ) : null}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

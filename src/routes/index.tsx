@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parse, type Locale } from "date-fns";
 import { ArrowRight } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -637,24 +637,32 @@ function BusinessAngle({ visitors, counts }: { visitors: VisitorData; counts?: R
   );
 }
 
+function hourHeading(hour: number, lang: string) {
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  if (lang === "ar") return `${hour12}${hour >= 12 ? "م" : "ص"}`;
+  return `${hour12}${hour >= 12 ? "pm" : "am"}`;
+}
+
 function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
   const { lang } = useI18n();
-  const hours = [10, 13, 16, 19, 22];
+  const hours = [1, 4, 7, 10, 13, 16, 19, 22];
   const max = Math.max(1, ...rows.flatMap((r) => r.hours));
   return (
-    <div className="w-full min-w-0">
-      <div className="grid grid-cols-[auto_repeat(24,minmax(0,1fr))] gap-1 text-[10px] text-muted-foreground mb-2">
-        <div />
+    <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-4 gap-y-1">
+      <div />
+      <div className="grid grid-cols-[repeat(24,minmax(0,1fr))] gap-1 overflow-hidden text-[10px] text-muted-foreground">
         {Array.from({ length: 24 }, (_, h) => (
-          <div key={h} className="text-center overflow-hidden leading-none">
-            {hours.includes(h) ? `${((h + 11) % 12) + 1}${lang === "ar" ? (h >= 12 ? "م" : "ص") : h >= 12 ? "p" : "a"}` : ""}
+          <div key={h} className="relative h-4 leading-none">
+            {hours.includes(h) ? (
+              <span className="absolute left-1/2 top-0.5 -translate-x-1/2 whitespace-nowrap">{hourHeading(h, lang)}</span>
+            ) : null}
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-1">
-        {rows.map((row) => (
-          <div key={row.name} className="grid grid-cols-[auto_repeat(24,minmax(0,1fr))] gap-1">
-            <div className="text-xs text-muted-foreground whitespace-nowrap pe-2 flex items-center">{row.name}</div>
+      {rows.map((row) => (
+        <Fragment key={row.name}>
+          <div className="whitespace-nowrap text-end text-xs text-muted-foreground">{row.name}</div>
+          <div className="grid min-w-0 grid-cols-[repeat(24,minmax(0,1fr))] gap-1">
             {row.hours.map((n, h) => {
               const t = n / max;
               return (
@@ -667,8 +675,8 @@ function Heatmap({ rows }: { rows: Array<{ name: string; hours: number[] }> }) {
               );
             })}
           </div>
-        ))}
-      </div>
+        </Fragment>
+      ))}
     </div>
   );
 }
