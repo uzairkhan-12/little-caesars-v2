@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, Cell, ComposedChart, Line, XAxis, YAxis } from "recharts";
 import { Shell } from "@/components/Shell";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { useI18n, type TFunction } from "@/lib/i18n";
@@ -21,7 +21,8 @@ import {
   getMidnightEnergyReports,
 } from "@/lib/energy-reports.functions";
 import { getStates, type HAState } from "@/lib/ha.functions";
-import { CHART_BLUE, CHART_PURPLE } from "@/lib/chart-colors";
+import { getHourlyByDay } from "@/lib/lc.functions";
+import { CHART_BLUE, CHART_ORANGE, CHART_PURPLE } from "@/lib/chart-colors";
 import {
   AC_UNITS,
   REPORT_DEVICES,
@@ -192,6 +193,7 @@ function ReportsPage() {
   const hourlyBaselinesFn = useServerFn(getHourlyBaselines);
   const acReportsFn = useServerFn(getAcQuarterReports);
   const acBaselinesFn = useServerFn(getAcQuarterBaselines);
+  const hourlyVisitsFn = useServerFn(getHourlyByDay);
 
   const reports = useQuery({
     queryKey: ["energy-reports", table],
@@ -236,7 +238,6 @@ function ReportsPage() {
     queryFn: () => acBaselinesFn(),
     refetchInterval: 60_000,
   });
-
   const devices = useMemo(() => devicesFor(table), [table]);
   const todayKey = riyadhEnergyDayKey();
   const calendarToday = riyadhCalendarDayKey();
@@ -443,6 +444,28 @@ function ReportsPage() {
     to: acTo,
   } = dayPageWindow(acDayPages, acPage);
   const acPeriodEnergy = filteredTotalEnergy(acFiltered);
+  const hourlyDayKey = hourMode === "energy" ? energyHourDay : calendarHourDay;
+  const hourlyVisits = useQuery({
+    queryKey: ["reports-hourly-visits", hourMode, hourlyDayKey],
+    enabled: view === "hourly",
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const load = async (day: string) => {
+        const result = await hourlyVisitsFn({ data: { day } });
+        return { date: day, hours: result.hours };
+      };
+      if (hourMode === "calendar") return [await load(hourlyDayKey)];
+      return Promise.all([load(hourlyDayKey), load(addCalendarKey(hourlyDayKey, 1))]);
+    },
+  });
+  const customersByHour = useMemo(() => {
+    if (!hourlyVisits.data) return null;
+    const map = new Map<string, number>();
+    for (const day of hourlyVisits.data) {
+      for (const bucket of day.hours) map.set(`${day.date}T${String(bucket.hour).padStart(2, "0")}`, bucket.entries);
+    }
+    return map;
+  }, [hourlyVisits.data]);
 
   useEffect(() => {
     setPage(1);
@@ -513,7 +536,7 @@ function ReportsPage() {
           </TabsTrigger>
           <TabsTrigger value="ac" className="text-sm px-4 py-2">
             {t("acLog")}
-            </TabsTrigger>
+          </TabsTrigger>
         </TabsList>
 
       <div className="mt-4 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
@@ -667,6 +690,7 @@ function ReportsPage() {
             nowKey={hourKey}
             loading={hourlyReports.isLoading}
             error={hourlyReports.isError}
+            customersByHour={customersByHour}
           />
         </TabsContent>
 
@@ -905,6 +929,7 @@ type HourPoint = {
   key: string;
   label: string;
   kwh: number | null;
+  customers: number | null;
   live: boolean;
   future: boolean;
 };
@@ -941,6 +966,7 @@ function HourlyWindow({
   nowKey,
   loading,
   error,
+  customersByHour,
 }: {
   mode: "energy" | "calendar";
   dayKey: string;
@@ -953,10 +979,12 @@ function HourlyWindow({
   nowKey: string;
   loading: boolean;
   error: boolean;
+  customersByHour: Map<string, number> | null;
 }) {
   const { t, locale, lang } = useI18n();
   const chartConfig = {
     kwh: { label: t("consumption"), color: CHART_BLUE },
+    customers: { label: t("customersEntered"), color: CHART_ORANGE },
     live: { label: t("openHour"), color: CHART_PURPLE },
   } satisfies ChartConfig;
 
@@ -973,9 +1001,10 @@ function HourlyWindow({
       const live = key === nowKey;
       const future = key > nowKey;
       const kwh = live ? (hasLive ? liveTotal : null) : future ? null : (closed.get(key) ?? null);
-      return { key, label: formatHour12(hour, lang), kwh, live, future };
+      const customers = customersByHour == null || future ? null : (customersByHour.get(key) ?? 0);
+      return { key, label: formatHour12(hour, lang), kwh, customers, live, future };
     });
-  }, [rows, liveRows, dayKey, mode, nowKey, lang]);
+  }, [rows, liveRows, dayKey, mode, nowKey, lang, customersByHour]);
 
   const recorded = points.filter((point) => point.kwh != null);
   const total = recorded.reduce((sum, point) => sum + (point.kwh ?? 0), 0);
@@ -1055,16 +1084,20 @@ function HourlyWindow({
           <p className="px-2 py-10 text-center text-sm text-muted-foreground">{t("reportsError")}</p>
         ) : (
           <ChartContainer config={chartConfig} className="aspect-auto h-64 w-full">
-            <BarChart data={points} margin={{ left: 4, right: 8, top: 12, bottom: 0 }}>
+            <ComposedChart data={points} margin={{ left: 4, right: 8, top: 12, bottom: 0 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} interval={1} tick={{ fontSize: 11 }} />
-              <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(value) => Number(value).toFixed(1)} />
+              <YAxis yAxisId="kwh" tickLine={false} axisLine={false} width={44} tickFormatter={(value) => Number(value).toFixed(1)} />
+              <YAxis yAxisId="customers" orientation="right" tickLine={false} axisLine={false} width={32} allowDecimals={false} />
               <ChartTooltip
                 cursor={{ fill: "var(--muted)", opacity: 0.35 }}
                 content={
                   <ChartTooltipContent
                     formatter={(_value, _name, item) => {
                       const point = item.payload as HourPoint;
+                      if (item.dataKey === "customers") {
+                        return point.customers == null ? "—" : t("customersCount", { count: point.customers });
+                      }
                       if (point.kwh == null) return "—";
                       const text = `${point.kwh.toFixed(2)} kWh`;
                       return point.live ? `${text} · ${t("openHour")}` : text;
@@ -1072,12 +1105,13 @@ function HourlyWindow({
                   />
                 }
               />
-              <Bar dataKey="kwh" radius={[6, 6, 0, 0]} maxBarSize={28}>
+              <Bar yAxisId="kwh" dataKey="kwh" radius={[6, 6, 0, 0]} maxBarSize={28}>
                 {points.map((point) => (
                   <Cell key={point.key} fill={point.live ? "var(--color-live)" : "var(--color-kwh)"} />
                 ))}
               </Bar>
-            </BarChart>
+              <Line yAxisId="customers" dataKey="customers" stroke="var(--color-customers)" strokeWidth={2} dot={false} connectNulls={false} />
+            </ComposedChart>
           </ChartContainer>
         )}
         {!loading && !error && recorded.length === 0 ? (
@@ -1091,6 +1125,10 @@ function HourlyWindow({
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: CHART_PURPLE }} />
             {t("openHour")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: CHART_ORANGE }} />
+            {t("customersEntered")}
           </span>
         </div>
       </div>
@@ -1110,10 +1148,10 @@ function HourlyWindow({
             >
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{point.label}</p>
               <p className="font-display text-lg tabular-nums leading-tight mt-1">
-                {point.kwh == null ? "—" : point.kwh.toFixed(2)}
+                {point.customers == null ? "—" : point.customers.toLocaleString(locale)}
               </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                {point.live ? t("openHour") : isPeak ? t("peakHour") : point.kwh == null ? "" : "kWh"}
+                {point.kwh == null ? (point.live ? t("openHour") : "") : `${point.kwh.toFixed(2)} kWh`}
               </p>
             </div>
           );
