@@ -9,8 +9,26 @@ export const REPORT_TABLE_LABELS: Record<ReportTable, string> = {
   chiller: "Chiller",
 };
 
-/** Tariff used for energy cost (SAR / kWh). */
+/** First band of a month, priced below the standard tariff. */
+export const ENERGY_TIER_KWH = 6000;
+export const ENERGY_TIER_SAR_PER_KWH = 0.22;
+/** Tariff for each kWh after the first {@link ENERGY_TIER_KWH} in a month. */
 export const ENERGY_SAR_PER_KWH = 0.32;
+
+/** Month cost: the first 6,000 kWh at 0.22 SAR, and everything above that at 0.32 SAR. */
+export function energyCostSar(kwh: number): number {
+  if (!Number.isFinite(kwh) || kwh <= 0) return 0;
+  const inTier = Math.min(kwh, ENERGY_TIER_KWH);
+  const above = kwh - inTier;
+  return inTier * ENERGY_TIER_SAR_PER_KWH + above * ENERGY_SAR_PER_KWH;
+}
+
+/** Cost of `sliceKwh` after `beforeKwh` has already been counted in the same month. */
+export function energySliceCostSar(beforeKwh: number, sliceKwh: number): number {
+  const before = Number.isFinite(beforeKwh) ? Math.max(0, beforeKwh) : 0;
+  const slice = Number.isFinite(sliceKwh) ? Math.max(0, sliceKwh) : 0;
+  return energyCostSar(before + slice) - energyCostSar(before);
+}
 
 /** Devices snapshotted at 6:00 AM Asia/Riyadh. Energy entity per device. */
 export const REPORT_DEVICES: Record<ReportTable, { name: string; entityId: string }[]> = {
@@ -70,6 +88,22 @@ export type AcQuarterRow = {
   day: string;
   /** `YYYY-MM-DDTHH:MM` in Asia/Riyadh, floored to 15 minutes. */
   slotKey: string;
+  /** Climate state at this sample: cool, fan_only, off, and so on. */
+  hvacMode?: string | null;
+};
+
+export type AcChangeRow = {
+  deviceName: string;
+  entityId: string;
+  readingTemp: number | null;
+  targetTemp: number | null;
+  readingDelta: number | null;
+  targetDelta: number | null;
+  day: string;
+  /** `YYYY-MM-DDTHH:MM:SS` in Asia/Riyadh. */
+  atKey: string;
+  /** Climate state when this change was stored. */
+  hvacMode?: string | null;
 };
 
 /** Extra sensors stored at 6:00 AM so Home can subtract them for today's totals. */
@@ -245,6 +279,64 @@ export function addQuarterKey(slotKey: string, steps: number) {
   const h = String(dt.getUTCHours()).padStart(2, "0");
   const min = String(dt.getUTCMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${h}:${min}`;
+}
+
+function slotClockMs(slotKey: string) {
+  const [date, hm] = slotKey.split("T");
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = hm.split(":").map(Number);
+  return Date.UTC(y, m - 1, d, hh, mm);
+}
+
+/**
+ * kWh an AC did not use after automation raised its target or switched it to fan only.
+ * The occupied setpoint is that unit's lowest target. The comparison is how fast it was
+ * cooling at that setpoint during the previous two hours.
+ * Each amount is counted on the hour the setback was in effect.
+ */
+export function automationSavedByHour(rows: AcQuarterRow[]): Map<string, number> {
+  const byDevice = new Map<string, AcQuarterRow[]>();
+  for (const row of rows) {
+    if (row.consumption == null) continue;
+    const list = byDevice.get(row.entityId) ?? [];
+    list.push(row);
+    byDevice.set(row.entityId, list);
+  }
+  const saved = new Map<string, number>();
+  const twoHours = 2 * 60 * 60 * 1000;
+  const conditioning = (mode: string | null | undefined) => mode === "cool" || mode === "heat";
+  for (const list of byDevice.values()) {
+    list.sort((a, b) => a.slotKey.localeCompare(b.slotKey));
+    const occupiedTargets = list
+      .filter((row) => conditioning(row.hvacMode) && row.targetTemp != null)
+      .map((row) => row.targetTemp as number);
+    const occupied = occupiedTargets.length ? Math.min(...occupiedTargets) : null;
+    const atOccupied = (row: AcQuarterRow) =>
+      conditioning(row.hvacMode) && occupied != null && row.targetTemp != null && row.targetTemp <= occupied + 0.4;
+    const setback = (row: AcQuarterRow) => {
+      if (row.hvacMode === "fan_only") return true;
+      return conditioning(row.hvacMode) && occupied != null && row.targetTemp != null && row.targetTemp > occupied + 0.4;
+    };
+    const recent: { at: number; rate: number }[] = [];
+    let baseline: number | null = null;
+    for (const row of list) {
+      const at = slotClockMs(row.slotKey);
+      const used = row.consumption ?? 0;
+      if (atOccupied(row)) {
+        recent.push({ at, rate: used / 0.25 });
+        const keep = at - twoHours;
+        while (recent.length && recent[0].at < keep) recent.shift();
+        baseline = recent.reduce((sum, item) => sum + item.rate, 0) / recent.length;
+        continue;
+      }
+      if (!setback(row) || baseline == null) continue;
+      const slice = Math.max(0, baseline * 0.25 - used);
+      if (slice <= 0) continue;
+      const hour = row.slotKey.slice(0, 13);
+      saved.set(hour, (saved.get(hour) ?? 0) + slice);
+    }
+  }
+  return saved;
 }
 
 /** kWh for each 15-minute sample is the next sample's meter minus this one. A missed quarter stays blank. */

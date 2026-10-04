@@ -32,6 +32,7 @@ function runSnapshot(root: string, logFd: number, script: string, args: string[]
     detached: true,
   });
   child.unref();
+  return child;
 }
 
 function slotStored(root: string, sql: string, key: string) {
@@ -55,7 +56,8 @@ export function startEnergyCollector() {
   const logPath = path.join(root, "data", "energy-snapshot.log");
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   const logFd = fs.openSync(logPath, "a");
-  const lastAttempt = { quarter: 0, hour: 0, midnight: 0, morning: 0 };
+  const lastAttempt = { quarter: 0, hour: 0, midnight: 0, morning: 0, change: 0 };
+  let changeRunning = false;
 
   const due = (name: keyof typeof lastAttempt, waitMs = 60_000) => {
     const now = Date.now();
@@ -76,6 +78,13 @@ export function startEnergyCollector() {
       due("quarter")
     ) {
       runSnapshot(root, logFd, "scripts/ac-quarter-snapshot.mjs");
+    }
+    if (!changeRunning && due("change", 20_000)) {
+      changeRunning = true;
+      const child = runSnapshot(root, logFd, "scripts/ac-change-snapshot.mjs");
+      child.once("exit", () => {
+        changeRunning = false;
+      });
     }
     if (
       !slotStored(root, "SELECT 1 AS ok FROM hourly_snapshots WHERE day_key = ? LIMIT 1", hourKey) &&

@@ -4,3 +4,4 @@ export const CHART_SERIES = ["#5eb3ff", "#a78bfa", "#f5a524", "#f472b6", "#34d39
 export const CHART_BLUE = CHART_SERIES[0];
 export const CHART_PURPLE = CHART_SERIES[1];
 export const CHART_ORANGE = CHART_SERIES[2];
+export const CHART_GREEN = CHART_SERIES[4];

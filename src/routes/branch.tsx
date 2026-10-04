@@ -22,8 +22,10 @@ import {
   Thermometer,
   X,
   Maximize2,
+  History,
 
 } from "lucide-react";
+import { AcHistoryDialog } from "@/components/AcHistory";
 import { Shell } from "@/components/Shell";
 import { useI18n } from "@/lib/i18n";
 import { HomeSkeleton } from "@/components/HomeSkeleton";
@@ -34,8 +36,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/Toggle";
-import { getSummary } from "@/lib/lc.functions";
+import { getSummary, SHIFT_OPEN_HOUR } from "@/lib/lc.functions";
 import { getStates, callService, type HAState } from "@/lib/ha.functions";
 import { getEnergyBaselines, getEnergyOverview } from "@/lib/energy-reports.functions";
 import { REPORT_TABLE_LABELS, sumTodayConsumption, todayConsumption, type ReportTable } from "@/lib/energy-devices";
@@ -303,7 +306,10 @@ function Home() {
     const energyId = acChannelEntity(ch, "energy");
     const used = todayConsumption(haNumericState(data, energyId), baselines[energyId]);
     energyMap[climateId] = {
-      current: haMetric(data, acChannelEntity(ch, "current")),
+      current: (() => {
+        const n = haNumericState(data, acChannelEntity(ch, "current"));
+        return n == null ? "N/A" : String(Math.abs(n));
+      })(),
       power: (() => {
         const n = floorZero(haNumericState(data, acChannelEntity(ch, "power")));
         return n == null ? "N/A" : String(n);
@@ -329,8 +335,9 @@ function Home() {
 
   const s = summary.data;
   const total = s?.counts.total ?? 0;
-  const today = s?.today;
-  const peak = (s?.hourly ?? []).reduce(
+  const shiftHours = (s?.hourly ?? []).filter((h) => h.hour >= SHIFT_OPEN_HOUR);
+  const shiftEntries = shiftHours.reduce((sum, h) => sum + h.entries, 0);
+  const peak = shiftHours.reduce(
     (p, h) => (h.entries > p.total ? { hour: h.hour, total: h.entries } : p),
     { hour: 0, total: 0 },
   );
@@ -365,11 +372,11 @@ function Home() {
         <SectionHeader title={t("liveOverview")} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={Users} label={t("inRestaurant")} value={total} hint={t("zonesCount", { count: s?.counts.zones.length ?? 0 })} tone="primary" />
-          <StatCard icon={ArrowUpRight} label={t("customerVisits")} value={today?.entries ?? 0} hint={today?.date ?? ""} tone="primary" />
+          <StatCard icon={ArrowUpRight} label={t("customerVisits")} value={shiftEntries} hint={t("shiftWindow")} tone="primary" />
           <StatCard
             icon={Activity}
             label={t("peakHour")}
-            value={formatHour12(peak.hour, lang)}
+            value={peak.total > 0 ? formatHour12(peak.hour, lang) : "—"}
             hint={t("customersCount", { count: peak.total })}
             tone="accent"
           />
@@ -1012,6 +1019,7 @@ function ClimateCard({
     }, 600);
   };
 
+  const [historyOpen, setHistoryOpen] = useState(false);
   const accentText = "text-primary";
   const accentBg = "bg-primary/20 text-primary";
   const accentBorder = "border-primary/40";
@@ -1146,7 +1154,7 @@ function ClimateCard({
       <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5 text-xs">
         <div className="flex justify-between items-center">
           <span className="uppercase tracking-wider text-muted-foreground text-[10px]">{t("current")}</span>
-          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? t("na") : `${parseFloat(energy.current).toFixed(2)} A`}</span>
+          <span className="font-semibold">{!energy?.current || energy.current === "N/A" ? t("na") : `${Math.abs(parseFloat(energy.current)).toFixed(2)} A`}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="uppercase tracking-wider text-muted-foreground text-[10px]">{t("power")}</span>
@@ -1157,6 +1165,18 @@ function ClimateCard({
           <span className="font-semibold">{!energy?.energy || energy.energy === "N/A" ? t("na") : `${parseFloat(energy.energy).toFixed(2)} kWh`}</span>
         </div>
       </div>
+      <Button type="button" variant="outline" size="sm" className="mt-4 w-full bg-input border-border" onClick={() => setHistoryOpen(true)}>
+        <History className="w-4 h-4" />
+        {t("acHistory")}
+      </Button>
+      {historyOpen ? (
+        <AcHistoryDialog
+          open
+          onOpenChange={setHistoryOpen}
+          entityId={c.entity_id}
+          name={known(attrs.friendly_name ?? c.entity_id)}
+        />
+      ) : null}
     </div>
   );
 }

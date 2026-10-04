@@ -47,6 +47,14 @@ export const getAcQuarterReports = createServerFn({ method: "GET" }).handler(asy
   return listAcQuarterReports();
 });
 
+export const getAcHistory = createServerFn({ method: "GET" })
+  .validator((d: { entityId?: string }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertUnlocked();
+    const { getAcUnitHistory } = await import("./energy-reports.server");
+    return getAcUnitHistory(data.entityId ?? "");
+  });
+
 export const getAcQuarterBaselines = createServerFn({ method: "GET" }).handler(async () => {
   await (await import("./gate.server")).assertUnlocked();
   const { getAcQuarterBaselines: load } = await import("./energy-reports.server");

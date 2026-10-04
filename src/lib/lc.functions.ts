@@ -175,6 +175,44 @@ export const getHourly = createServerFn({ method: "GET" }).handler(async () => {
   return transformHourly(data);
 });
 
+/** One bar per shift: 10:00 that day through 05:00 the next morning. Today stops at the current hour. */
+export const getShiftTraffic = createServerFn({ method: "GET" })
+  .validator((d: { days?: number }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertUnlocked();
+    const count = data.days ?? 14;
+    const today = riyadhTodayKey();
+    const keys = Array.from({ length: count }, (_, i) => addDaysKey(today, i - (count - 1)));
+    const fetched = await Promise.all(
+      keys.map(async (day) => {
+        const empty: HourlyResponse = {
+          date: day,
+          hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, entries: 0, exits: 0, events: 0 })),
+        };
+        const raw = await safeJson<HourlyResponse>(`/api/hourly?day=${day}`, empty);
+        return { day, hours: transformHourly(raw).hours };
+      }),
+    );
+    const byDay = new Map(fetched.map((row) => [row.day, row.hours]));
+    const closed = keys.map((day, index) => {
+      const open = shiftEntries(byDay.get(day), false);
+      const close =
+        index < keys.length - 1
+          ? (byDay.get(keys[index + 1]) ?? [])
+              .filter((row) => row.hour < SHIFT_CLOSE_HOUR)
+              .reduce((sum, row) => sum + row.entries, 0)
+          : 0;
+      return { date: day, entries: open + close };
+    });
+    const todayHours = byDay.get(today) ?? [];
+    const hours = SHIFT_HOURS.map((hour) => {
+      const row = todayHours.find((item) => item.hour === hour);
+      const entries = hour >= SHIFT_OPEN_HOUR ? (row?.entries ?? 0) : 0;
+      return { hour, entries, exits: 0, visits: entries };
+    });
+    return { hours, entries: shiftEntries(todayHours, false), days: closed };
+  });
+
 export const getDaily = createServerFn({ method: "GET" })
   .validator((d: { days?: number }) => d)
   .handler(async ({ data }) => {
@@ -182,6 +220,297 @@ export const getDaily = createServerFn({ method: "GET" })
     const days = data.days ?? 14;
     const responseData = await safeJson<DailyResponse>(`/api/daily?days=${days}`, { since: "", days: [] });
     return transformDaily(responseData);
+  });
+
+const ENERGY_DAY_HOUR = 6;
+
+function entriesBefore(hours: HourBucket[], hour: number) {
+  return hours.filter((row) => row.hour < hour).reduce((sum, row) => sum + row.entries, 0);
+}
+
+function sumDailyEntries(byDate: Map<string, number>, start: string, end: string) {
+  let total = 0;
+  for (const day of enumerateDays(start, end)) total += byDate.get(day) ?? 0;
+  return total;
+}
+
+async function localHourBuckets(day: string) {
+  const empty: HourlyResponse = {
+    date: day,
+    hours: Array.from({ length: 24 }, (_, hour) => ({ hour, entries: 0, exits: 0, events: 0 })),
+  };
+  return transformHourly(await safeJson<HourlyResponse>(`/api/hourly?day=${day}`, empty)).hours;
+}
+
+/**
+ * Customer entries for the same dates as an energy report.
+ * `energy` is 6:00 AM on the start date through 6:00 AM after the end date.
+ * `calendar` is midnight on the start date through midnight after the end date.
+ * An open day stops at now.
+ */
+export const getReportCustomers = createServerFn({ method: "GET" })
+  .validator((d: { start?: string; end?: string }) => d)
+  .handler(async ({ data }) => {
+    await (await import("./gate.server")).assertAdmin();
+    const now = new Date();
+    const calendarToday = riyadhDayKey(now);
+    const energyToday = riyadhHourNow(now) < ENERGY_DAY_HOUR ? addDaysKey(calendarToday, -1) : calendarToday;
+    let start = DAY_KEY.test(data.start ?? "") ? data.start! : calendarToday;
+    let end = DAY_KEY.test(data.end ?? "") ? data.end! : start;
+    if (start > end) [start, end] = [end, start];
+    const energyEnd = end > energyToday ? energyToday : end;
+    const calendarEnd = end > calendarToday ? calendarToday : end;
+    const since = Math.min(400, Math.max(enumerateDays(start, calendarToday).length, 1));
+    const daily = transformDaily(await safeJson<DailyResponse>(`/api/daily?days=${since}`, { since: "", days: [] }));
+    const byDate = new Map(daily.days.map((row) => [row.date, row.entries]));
+    const calendar = start > calendarEnd ? 0 : sumDailyEntries(byDate, start, calendarEnd);
+
+    let energy = 0;
+    if (start <= energyEnd) {
+      const open = energyEnd === energyToday;
+      const [startHours, nextHours, liveMorning] = await Promise.all([
+        localHourBuckets(start),
+        open ? Promise.resolve([] as HourBucket[]) : localHourBuckets(addDaysKey(energyEnd, 1)),
+        open && calendarToday !== energyToday ? localHourBuckets(calendarToday) : Promise.resolve([] as HourBucket[]),
+      ]);
+      energy = sumDailyEntries(byDate, start, energyEnd) - entriesBefore(startHours, ENERGY_DAY_HOUR);
+      if (!open) energy += entriesBefore(nextHours, ENERGY_DAY_HOUR);
+      else if (calendarToday !== energyToday) energy += entriesBefore(liveMorning, ENERGY_DAY_HOUR);
+      if (energy < 0) energy = 0;
+    }
+    return { energy, calendar };
+  });
+
+function riyadhHourNow(date = new Date()) {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  return Number(hour.find((part) => part.type === "hour")?.value ?? "0") % 24;
+}
+
+function riyadhDayKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/** The shift that is open now, or the one that closed at 5:00 AM if the store is between shifts. */
+export function currentShiftDay(date = new Date()) {
+  const day = riyadhDayKey(date);
+  return riyadhHourNow(date) < SHIFT_OPEN_HOUR ? addDaysKey(day, -1) : day;
+}
+
+export type TableOccupancy = {
+  zone: string;
+  peopleNow: number;
+  /** Highest people count seen at this table in the selected range. */
+  peak: number;
+  occupiedSeconds: number;
+};
+
+export type BusinessScope = "shift" | "all";
+
+export type BusinessReport = {
+  start: string;
+  end: string;
+  scope: BusinessScope;
+  zone: string;
+  current: boolean;
+  customers: number;
+  /** One point per hour when the range is a single day, otherwise one point per day. */
+  seriesKind: "hour" | "day";
+  series: Array<{ key: string; entries: number | null }>;
+  peopleNow: number;
+  occupiedTables: number;
+  tableCount: number;
+  occupiedSeconds: number;
+  zones: string[];
+  tables: TableOccupancy[];
+  /** True when part of the range is before live minute logs and occupied time is estimated. */
+  occupancyEstimated: boolean;
+  /** True when a long range uses calendar-day customer counts instead of the shift split. */
+  calendarCustomers: boolean;
+};
+
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function enumerateDays(start: string, end: string) {
+  const days: string[] = [];
+  let cursor = start;
+  while (cursor <= end && days.length < 400) {
+    days.push(cursor);
+    cursor = addDaysKey(cursor, 1);
+  }
+  return days;
+}
+
+function riyadhInstant(dayKey: string, hour: number) {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, hour - 3, 0, 0));
+}
+
+/** Hourly occupancy allows 92 days. Stay under that so a long report is several safe calls. */
+const OCCUPANCY_CHUNK_MS = 90 * 24 * 60 * 60 * 1000;
+
+type ZoneOccupancyResponse = {
+  live_since?: string;
+  zones?: Record<string, { summary?: { peak?: number; occupied_min?: number } }>;
+};
+
+function utcStamp(date: Date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Occupied minutes and peak people for each table, using the same from/to/zone filters as the report. */
+async function loadTableOccupancy(fromMs: number, toMs: number, zone: string) {
+  const tables = new Map<string, { peak: number; occupiedMin: number }>();
+  let estimated = false;
+  if (!(toMs > fromMs)) return { tables, estimated };
+  const chunks: Array<{ start: number; end: number }> = [];
+  for (let cursor = fromMs; cursor < toMs; ) {
+    const end = Math.min(cursor + OCCUPANCY_CHUNK_MS, toMs);
+    chunks.push({ start: cursor, end });
+    cursor = end;
+  }
+  const pages = await Promise.all(
+    chunks.map((chunk) => {
+      const params = new URLSearchParams({
+        from: utcStamp(new Date(chunk.start)),
+        to: utcStamp(new Date(chunk.end)),
+        bucket: "hour",
+      });
+      if (zone !== "all") params.set("zone", zone);
+      return safeJson<ZoneOccupancyResponse>(`/api/zone-occupancy?${params}`, { zones: {} });
+    }),
+  );
+  for (const page of pages) {
+    const liveSince = page.live_since ? Date.parse(page.live_since) : Number.NaN;
+    if (Number.isFinite(liveSince) && fromMs < liveSince) estimated = true;
+    for (const [name, row] of Object.entries(page.zones ?? {})) {
+      if (!name.startsWith("table_")) continue;
+      if (zone !== "all" && name !== zone) continue;
+      const prev = tables.get(name) ?? { peak: 0, occupiedMin: 0 };
+      const summary = row.summary ?? {};
+      tables.set(name, {
+        peak: Math.max(prev.peak, summary.peak ?? 0),
+        occupiedMin: prev.occupiedMin + (summary.occupied_min ?? 0),
+      });
+    }
+  }
+  return { tables, estimated };
+}
+
+export const getBusinessReport = createServerFn({ method: "GET" })
+  .validator((d: { start?: string; end?: string; zone?: string; scope?: string }) => d)
+  .handler(async ({ data }): Promise<BusinessReport> => {
+    await (await import("./gate.server")).assertAdmin();
+    const now = new Date();
+    const today = riyadhDayKey(now);
+    let start = DAY_KEY.test(data.start ?? "") ? data.start! : currentShiftDay(now);
+    let end = DAY_KEY.test(data.end ?? "") ? data.end! : start;
+    if (end > today) end = today;
+    if (start > end) start = end;
+    const scope: BusinessScope = data.scope === "all" ? "all" : "shift";
+    const zone = data.zone && /^[a-z0-9_]+$/.test(data.zone) && data.zone !== "all" ? data.zone : "all";
+    const days = enumerateDays(start, end);
+    const windowStart = scope === "shift" ? riyadhInstant(start, SHIFT_OPEN_HOUR) : riyadhInstant(start, 0);
+    const windowEnd =
+      scope === "shift" ? riyadhInstant(addDaysKey(end, 1), SHIFT_CLOSE_HOUR) : riyadhInstant(addDaysKey(end, 1), 0);
+    const queryEnd = now < windowEnd ? now : windowEnd;
+
+    const emptyHour = (date: string): HourlyResponse => ({
+      date,
+      hours: Array.from({ length: 24 }, (_, hour) => ({ hour, entries: 0, exits: 0, events: 0 })),
+    });
+    const hourDays =
+      days.length <= 31
+        ? [...new Set(scope === "shift" ? [...days, addDaysKey(end, 1)] : days)]
+        : [];
+    const [zones, counts, hourlyRows, occupancy] = await Promise.all([
+      safeJson<Zones>("/api/zones", { zones: [] }),
+      safeJson<Counts>("/api/counts", { zones: [], counts: {}, total: 0 }),
+      Promise.all(
+        hourDays.map(async (day) => {
+          const raw = await safeJson<HourlyResponse>(`/api/hourly?day=${day}`, emptyHour(day));
+          return [day, transformHourly(raw).hours] as const;
+        }),
+      ),
+      loadTableOccupancy(windowStart.getTime(), queryEnd.getTime(), zone),
+    ]);
+
+    const hoursByDay = new Map(hourlyRows);
+    const customersFor = (day: string) => {
+      const open = hoursByDay.get(day) ?? [];
+      if (scope === "all") return open.reduce((sum, row) => sum + row.entries, 0);
+      const close = hoursByDay.get(addDaysKey(day, 1)) ?? [];
+      return (
+        shiftEntries(open, false) +
+        close.filter((row) => row.hour < SHIFT_CLOSE_HOUR).reduce((sum, row) => sum + row.entries, 0)
+      );
+    };
+    let calendarCustomers = false;
+    let customers = hourDays.length ? days.reduce((sum, day) => sum + customersFor(day), 0) : 0;
+    let series =
+      days.length === 1
+        ? (scope === "shift" ? SHIFT_HOURS : Array.from({ length: 24 }, (_, hour) => hour)).map((hour) => {
+            const base = scope === "shift" && hour < SHIFT_OPEN_HOUR ? addDaysKey(start, 1) : start;
+            const starts = riyadhInstant(base, hour);
+            if (starts.getTime() > now.getTime()) return { key: String(hour), entries: null };
+            const source = hoursByDay.get(base) ?? [];
+            return { key: String(hour), entries: source.find((row) => row.hour === hour)?.entries ?? 0 };
+          })
+        : days.map((day) => ({ key: day, entries: hourDays.length ? customersFor(day) : null }));
+    if (!hourDays.length) {
+      calendarCustomers = true;
+      const since = Math.min(400, Math.max(enumerateDays(start, today).length, 1));
+      const daily = transformDaily(await safeJson<DailyResponse>(`/api/daily?days=${since}`, { since: "", days: [] }));
+      const byDate = new Map(daily.days.map((row) => [row.date, row.entries]));
+      series = days.map((day) => ({ key: day, entries: byDate.get(day) ?? 0 }));
+      customers = series.reduce((sum, point) => sum + (point.entries ?? 0), 0);
+    }
+
+    const zoneNames = zones.zones.filter((name) => name.startsWith("table_"));
+    for (const name of occupancy.tables.keys()) {
+      if (!zoneNames.includes(name)) zoneNames.push(name);
+    }
+    zoneNames.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const shown = zone === "all" ? zoneNames : zoneNames.filter((name) => name === zone);
+
+    const tables = shown.map((name) => {
+      const row = occupancy.tables.get(name);
+      return {
+        zone: name,
+        peopleNow: counts.counts[name] ?? 0,
+        peak: row?.peak ?? 0,
+        occupiedSeconds: (row?.occupiedMin ?? 0) * 60,
+      };
+    });
+    const liveTables = zone === "all" ? tables : zoneNames.map((name) => ({ peopleNow: counts.counts[name] ?? 0 }));
+    const includesNow = windowStart.getTime() <= now.getTime() && now.getTime() <= windowEnd.getTime();
+
+    return {
+      start,
+      end,
+      scope,
+      zone,
+      current: includesNow,
+      customers,
+      seriesKind: days.length === 1 ? "hour" : "day",
+      series,
+      peopleNow: counts.total,
+      occupiedTables: liveTables.filter((table) => table.peopleNow > 0).length,
+      tableCount: zone === "all" ? zoneNames.length : shown.length,
+      occupiedSeconds: tables.reduce((sum, table) => sum + table.occupiedSeconds, 0),
+      zones: zoneNames,
+      tables,
+      occupancyEstimated: occupancy.estimated,
+      calendarCustomers,
+    };
   });
 
 export const getEvents = createServerFn({ method: "GET" })
@@ -239,6 +568,24 @@ function daysInMonthKey(ym: string) {
 
 function clampDayKey(ym: string, day: number) {
   return `${ym}-${String(Math.min(Math.max(day, 1), daysInMonthKey(ym))).padStart(2, "0")}`;
+}
+
+/** Shift opens at 10:00 and closes at 05:00 the next morning. Hours 0–4 belong to the shift that opened the day before. */
+export const SHIFT_OPEN_HOUR = 10;
+export const SHIFT_CLOSE_HOUR = 5;
+export const SHIFT_HOURS: number[] = [
+  ...Array.from({ length: 24 - SHIFT_OPEN_HOUR }, (_, i) => i + SHIFT_OPEN_HOUR),
+  ...Array.from({ length: SHIFT_CLOSE_HOUR }, (_, i) => i),
+];
+
+export function shiftEntries(hours: HourBucket[] | undefined, includeClose: boolean) {
+  const at = (hour: number) => hours?.find((row) => row.hour === hour)?.entries ?? 0;
+  let total = 0;
+  for (let hour = SHIFT_OPEN_HOUR; hour < 24; hour++) total += at(hour);
+  if (includeClose) {
+    for (let hour = 0; hour < SHIFT_CLOSE_HOUR; hour++) total += at(hour);
+  }
+  return total;
 }
 
 function addDaysKey(dayKey: string, delta: number) {

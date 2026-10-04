@@ -1,7 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { CHART_BLUE } from "@/lib/chart-colors";
-import { ENERGY_SAR_PER_KWH } from "@/lib/energy-devices";
+import {
+  ENERGY_SAR_PER_KWH,
+  ENERGY_TIER_KWH,
+  ENERGY_TIER_SAR_PER_KWH,
+  energyCostSar,
+  energySliceCostSar,
+} from "@/lib/energy-devices";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
 export type ChainEnergy = {
@@ -141,6 +147,46 @@ function yearKwh(energy: ChainEnergy, field: "total" | "prevYear") {
   return energy.yearMonths.filter((m) => m.month.startsWith(prefix) && m.month <= through).reduce((s, m) => s + m[field], 0);
 }
 
+function previousMonthKey(todayKey: string) {
+  const [year, month] = todayKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Bill for each finished month in the range, with the open month including live use. */
+function monthsCost(energy: ChainEnergy, liveToday: number, months: string[] | null) {
+  const current = energy.todayKey.slice(0, 7);
+  return energy.yearMonths.reduce((sum, month) => {
+    if (month.month > current) return sum;
+    if (months && !months.includes(month.month)) return sum;
+    const kwh = month.total + (month.month === current ? liveToday : 0);
+    return sum + energyCostSar(kwh);
+  }, 0);
+}
+
+function rangeCost(energy: ChainEnergy, range: ChainRange, liveToday: number) {
+  const monthLive = energy.month.current + liveToday;
+  if (range === "mtd") return energyCostSar(monthLive);
+  if (range === "today") return energySliceCostSar(energy.month.current, liveToday);
+  if (range === "yesterday") {
+    const yesterday = energy.today.total;
+    if (energy.month.current + 1e-6 >= yesterday) return energySliceCostSar(energy.month.current - yesterday, yesterday);
+    const prev = energy.yearMonths.find((month) => month.month === previousMonthKey(energy.todayKey));
+    if (prev && prev.total + 1e-6 >= yesterday) return energySliceCostSar(prev.total - yesterday, yesterday);
+    return energyCostSar(yesterday);
+  }
+  if (range === "week") {
+    const week = (energy.weekToDate?.current ?? energy.week.current) + liveToday;
+    if (week <= monthLive + 1e-6) return energySliceCostSar(monthLive - week, week);
+    const earlier = week - monthLive;
+    const prev = energy.yearMonths.find((month) => month.month === previousMonthKey(energy.todayKey));
+    const earlierRate = prev != null && prev.total > ENERGY_TIER_KWH ? ENERGY_SAR_PER_KWH : ENERGY_TIER_SAR_PER_KWH;
+    return energyCostSar(monthLive) + earlier * earlierRate;
+  }
+  if (range === "year") return monthsCost(energy, liveToday, null);
+  return monthsCost(energy, liveToday, quarterKeys(energy.todayKey));
+}
+
 function energyCurrent(energy: ChainEnergy, range: ChainRange, liveToday: number) {
   if (range === "today") return liveToday;
   if (range === "yesterday") return energy.today.total;
@@ -248,7 +294,7 @@ export function ChainKpiGrid({
   const money = lang === "ar" ? "ر.س" : "SAR";
   const kwh = energyCurrent(energy, range, liveTodayKwh);
   const visits = visitorCurrent(visitors, range);
-  const cost = kwh * (energy.tariffSarPerKwh || ENERGY_SAR_PER_KWH);
+  const cost = rangeCost(energy, range, liveTodayKwh);
   const kwhPerCust = visits > 0 ? kwh / visits : null;
   const prevKwh =
     range === "today"
@@ -280,9 +326,8 @@ export function ChainKpiGrid({
   const monthKwh = energy.month.current;
   const lastMonthKwh = energy.month.previous;
   const lastYearKwh = energy.year.previous;
-  const rate = energy.tariffSarPerKwh || ENERGY_SAR_PER_KWH;
   const savedKwh = averageSavedKwh(monthKwh, [lastMonthKwh, lastYearKwh]);
-  const savedSar = savedKwh != null ? savedKwh * rate : null;
+  const savedSar = savedKwh != null ? energyCostSar(monthKwh + savedKwh) - energyCostSar(monthKwh) : null;
   const avgBaseline =
     lastMonthKwh != null && lastYearKwh != null
       ? (lastMonthKwh + lastYearKwh) / 2
@@ -311,9 +356,10 @@ export function ChainKpiGrid({
     const v = visitRunning[i] ?? 0;
     return v > 0 ? e.current / v : 0;
   });
-  const savedSeries = energy.cumulative.map(
-    (e) => ((e.previous - e.current + (e.year - e.current)) / 2) * rate,
-  );
+  const savedSeries = energy.cumulative.map((e) => {
+    const baseline = (e.previous + e.year) / 2;
+    return energyCostSar(baseline) - energyCostSar(e.current);
+  });
   const energyLabel =
     range === "today"
       ? t("energyToday")
@@ -396,7 +442,13 @@ export function ChainKpiGrid({
       </KpiCard>}
       {showEnergy && <KpiCard label={costLabel} value={formatSar(cost, locale, money)} color="#64748b" series={energySeries}>
         {energyDeltaA && <DeltaLine pct={energyDeltaA.pct} vs={energyDeltaA.pct == null ? t("needMoreDays", { vs: energyDeltaA.vs }) : energyDeltaA.vs} />}
-        <p className="text-[11px] text-muted-foreground">{t("tariffLine", { rate: energy.tariffSarPerKwh.toFixed(2) })}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {t("tariffLine", {
+            cap: ENERGY_TIER_KWH.toLocaleString(locale),
+            low: ENERGY_TIER_SAR_PER_KWH.toFixed(2),
+            high: ENERGY_SAR_PER_KWH.toFixed(2),
+          })}
+        </p>
       </KpiCard>}
       {showBusiness && <KpiCard label={visitLabel} value={formatVisits(visits, locale)} color="#a78bfa" series={visitSeries}>
         {visitDeltaA && <DeltaLine pct={visitDeltaA.pct} vs={visitDeltaA.pct == null ? t("needMoreDays", { vs: visitDeltaA.vs }) : visitDeltaA.vs} invert />}
@@ -481,7 +533,7 @@ export function BranchesBoard({
   const visits = visitors.mtd;
   const kwhPerCust = visits > 0 ? kwh / visits : null;
   const savedKwhAvg = averageSavedKwh(kwh, [energy.month.previous, energy.year.previous]);
-  const saved = savedKwhAvg != null ? savedKwhAvg * energy.tariffSarPerKwh : null;
+  const saved = savedKwhAvg != null ? energyCostSar(kwh + savedKwhAvg) - energyCostSar(kwh) : null;
   const vsAug = energy.month.changePct;
   const trend = energy.days.map((d) => d.total);
   const rows = useMemo(() => BRANCHES.filter((b) => region === "all" || b.region === region), [region]);

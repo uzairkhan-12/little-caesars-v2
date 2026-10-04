@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { AcQuarterRow, EnergyReportRow, ReportTable } from "./energy-devices";
+import type { AcChangeRow, AcQuarterRow, EnergyReportRow, ReportTable } from "./energy-devices";
 
 const SQLITE_PATH = path.join(process.cwd(), "data", "energy.sqlite");
 const JSON_PATH = path.join(process.cwd(), "data", "energy-reports.json");
@@ -78,7 +78,29 @@ function ensureSchema(database: DatabaseSync) {
       PRIMARY KEY (entity_id, slot_key)
     ) WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS idx_ac_quarter_slot ON ac_quarter_snapshots (slot_key);
+    CREATE TABLE IF NOT EXISTS ac_change_snapshots (
+      entity_id TEXT NOT NULL,
+      at_key TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      energy_entity_id TEXT NOT NULL,
+      reading_temp REAL,
+      target_temp REAL,
+      reading_delta REAL,
+      target_delta REAL,
+      energy REAL,
+      day TEXT NOT NULL,
+      PRIMARY KEY (entity_id, at_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_ac_change_entity ON ac_change_snapshots (entity_id, at_key);
   `);
+  ensureColumn(database, "ac_quarter_snapshots", "hvac_mode", "TEXT");
+  ensureColumn(database, "ac_change_snapshots", "hvac_mode", "TEXT");
+}
+
+function ensureColumn(database: DatabaseSync, table: string, column: string, type: string) {
+  const cols = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((col) => col.name === column)) return;
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 function migrateJsonIfNeeded(database: DatabaseSync) {
@@ -183,6 +205,7 @@ type AcQuarterRecord = {
   energy: number | null;
   day: string;
   slot_key: string;
+  hvac_mode: string | null;
 };
 
 function toAcRow(row: AcQuarterRecord): AcQuarterRow {
@@ -195,6 +218,7 @@ function toAcRow(row: AcQuarterRecord): AcQuarterRow {
     energy: row.energy,
     day: row.day,
     slotKey: row.slot_key,
+    hvacMode: row.hvac_mode,
   };
 }
 
@@ -204,6 +228,44 @@ export function listAcQuarterRows(): AcQuarterRow[] {
     .prepare("SELECT * FROM ac_quarter_snapshots ORDER BY slot_key, entity_id")
     .all() as AcQuarterRecord[];
   return rows.map(toAcRow);
+}
+
+export function listAcQuarterRowsFor(entityId: string): AcQuarterRow[] {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT * FROM ac_quarter_snapshots WHERE entity_id = ? ORDER BY slot_key")
+    .all(entityId) as AcQuarterRecord[];
+  return rows.map(toAcRow);
+}
+
+type AcChangeRecord = {
+  entity_id: string;
+  at_key: string;
+  device_name: string;
+  reading_temp: number | null;
+  target_temp: number | null;
+  reading_delta: number | null;
+  target_delta: number | null;
+  day: string;
+  hvac_mode: string | null;
+};
+
+export function listAcChangeRows(entityId: string): AcChangeRow[] {
+  const database = openEnergyDb();
+  const rows = database
+    .prepare("SELECT * FROM ac_change_snapshots WHERE entity_id = ? ORDER BY at_key DESC")
+    .all(entityId) as AcChangeRecord[];
+  return rows.map((row) => ({
+    deviceName: row.device_name,
+    entityId: row.entity_id,
+    readingTemp: row.reading_temp,
+    targetTemp: row.target_temp,
+    readingDelta: row.reading_delta,
+    targetDelta: row.target_delta,
+    day: row.day,
+    atKey: row.at_key,
+    hvacMode: row.hvac_mode,
+  }));
 }
 
 /** Sample stored at the start of the current 15-minute slot. */

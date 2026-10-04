@@ -57,7 +57,29 @@ function ensureSchema(db) {
       PRIMARY KEY (entity_id, slot_key)
     ) WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS idx_ac_quarter_slot ON ac_quarter_snapshots (slot_key);
+    CREATE TABLE IF NOT EXISTS ac_change_snapshots (
+      entity_id TEXT NOT NULL,
+      at_key TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      energy_entity_id TEXT NOT NULL,
+      reading_temp REAL,
+      target_temp REAL,
+      reading_delta REAL,
+      target_delta REAL,
+      energy REAL,
+      day TEXT NOT NULL,
+      PRIMARY KEY (entity_id, at_key)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_ac_change_entity ON ac_change_snapshots (entity_id, at_key);
   `);
+  ensureColumn(db, "ac_quarter_snapshots", "hvac_mode", "TEXT");
+  ensureColumn(db, "ac_change_snapshots", "hvac_mode", "TEXT");
+}
+
+function ensureColumn(db, table, column, type) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (cols.some((col) => col.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 function storeTable(store) {
@@ -173,11 +195,55 @@ export function hasAcSlot(db, slotKey) {
   return Boolean(db.prepare("SELECT 1 FROM ac_quarter_snapshots WHERE slot_key = ? LIMIT 1").get(slotKey));
 }
 
+export function lastAcSample(db, entityId) {
+  const change = db
+    .prepare(
+      "SELECT reading_temp, target_temp, hvac_mode FROM ac_change_snapshots WHERE entity_id = ? ORDER BY at_key DESC LIMIT 1",
+    )
+    .get(entityId);
+  if (change) return change;
+  return db
+    .prepare(
+      "SELECT reading_temp, target_temp, hvac_mode FROM ac_quarter_snapshots WHERE entity_id = ? ORDER BY slot_key DESC LIMIT 1",
+    )
+    .get(entityId);
+}
+
+export function insertAcChanges(db, rows) {
+  const stmt = db.prepare(
+    `INSERT OR IGNORE INTO ac_change_snapshots
+      (entity_id, at_key, device_name, energy_entity_id, reading_temp, target_temp, reading_delta, target_delta, energy, day, hvac_mode)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  db.exec("BEGIN");
+  try {
+    for (const row of rows) {
+      stmt.run(
+        row.entityId,
+        row.atKey,
+        row.deviceName,
+        row.energyEntityId,
+        row.readingTemp,
+        row.targetTemp,
+        row.readingDelta,
+        row.targetDelta,
+        row.energy,
+        row.day,
+        row.hvacMode ?? null,
+      );
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
+
 export function insertAcRows(db, rows) {
   const stmt = db.prepare(
     `INSERT OR REPLACE INTO ac_quarter_snapshots
-      (entity_id, device_name, energy_entity_id, reading_temp, target_temp, energy, day, slot_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (entity_id, device_name, energy_entity_id, reading_temp, target_temp, energy, day, slot_key, hvac_mode)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   db.exec("BEGIN");
   try {
@@ -191,6 +257,7 @@ export function insertAcRows(db, rows) {
         row.energy,
         row.day,
         row.slotKey,
+        row.hvacMode ?? null,
       );
     }
     db.exec("COMMIT");

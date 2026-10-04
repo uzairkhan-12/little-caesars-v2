@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, ArrowUpRight } from "lucide-react";
-import { getDaily, getHourlyByDay, getHourlyByDow, getSummary } from "@/lib/lc.functions";
+import { getHourlyByDow, getShiftTraffic } from "@/lib/lc.functions";
 import { useI18n } from "@/lib/i18n";
 import { CHART_BLUE } from "@/lib/chart-colors";
 import { formatHour12 } from "@/lib/utils";
@@ -19,34 +19,20 @@ function riyadhTodayKey() {
 }
 
 export function VisitorTrafficSection({ className }: { className?: string }) {
-  const summaryFn = useServerFn(getSummary);
-  const dailyFn = useServerFn(getDaily);
-  const hourlyByDayFn = useServerFn(getHourlyByDay);
+  const shiftFn = useServerFn(getShiftTraffic);
   const hourlyByDowFn = useServerFn(getHourlyByDow);
 
   const { t, lang, locale, known } = useI18n();
-  const today = riyadhTodayKey();
   const [filter, setFilter] = useState("today");
   const isToday = filter === "today";
   const isDow = filter.startsWith("dow:");
   const dowValue = isDow ? parseInt(filter.split(":")[1] ?? "-1", 10) : -1;
 
-  const { data: summary } = useQuery({
-    queryKey: ["lc", "summary"],
-    queryFn: () => summaryFn(),
-    refetchInterval: 8000,
-  });
-  const { data: daily } = useQuery({
-    queryKey: ["lc", "daily", 14],
-    queryFn: () => dailyFn({ data: { days: 14 } }),
-    refetchInterval: 30000,
-  });
-  const { data: hourlyByDay, isFetching: hourlyByDayLoading, isSuccess: hourlyByDayReady } = useQuery({
-    queryKey: ["lc", "hourly", "day", today],
-    queryFn: () => hourlyByDayFn({ data: { day: today } }),
-    enabled: isToday,
+  const { data: shift, isFetching: shiftLoading, isSuccess: shiftReady } = useQuery({
+    queryKey: ["lc", "shift", 14],
+    queryFn: () => shiftFn({ data: { days: 14 } }),
     staleTime: 0,
-    refetchInterval: isToday ? 10000 : false,
+    refetchInterval: 30000,
   });
   const { data: hourlyDow, isFetching: hourlyDowLoading, isSuccess: hourlyDowReady } = useQuery({
     queryKey: ["lc", "hourly", "dow", dowValue],
@@ -55,13 +41,13 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
     staleTime: 0,
   });
 
-  const hourlyLoading = isToday ? hourlyByDayLoading && !hourlyByDayReady : hourlyDowLoading && !hourlyDowReady;
+  const hourlyLoading = isToday ? shiftLoading && !shiftReady : hourlyDowLoading && !hourlyDowReady;
   const hourlyData = isToday
-    ? (hourlyByDay?.hours ?? summary?.hourly ?? [])
+    ? (shift?.hours ?? [])
     : hourlyDowReady
       ? (hourlyDow?.buckets ?? [])
       : [];
-  const totals = isToday ? summary?.today : undefined;
+  const totals = isToday ? { entries: shift?.entries ?? 0 } : undefined;
   const peak = hourlyData.reduce(
     (p, h) => (h.entries > p.total ? { hour: h.hour, total: h.entries } : p),
     { hour: 0, total: 0 },
@@ -81,7 +67,7 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
         <Kpi label={t("entries")} value={totals?.entries ?? 0} icon={ArrowUpRight} tone="success" />
         <Kpi
           label={t("peakHour")}
-          value={formatHour12(peak.hour, lang)}
+          value={peak.total > 0 ? formatHour12(peak.hour, lang) : "—"}
           hint={t("customersCount", { count: peak.total })}
           icon={Activity}
           tone="accent"
@@ -91,7 +77,10 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
       <div className="mt-4 grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-3 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-            <h3 className="font-display text-xl tracking-wider">{t("enteredByHour")}</h3>
+            <div>
+              <h3 className="font-display text-xl tracking-wider">{t("enteredByHour")}</h3>
+              {isToday && <p className="text-xs text-muted-foreground mt-1">{t("shiftWindow")}</p>}
+            </div>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -123,7 +112,7 @@ export function VisitorTrafficSection({ className }: { className?: string }) {
         <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border shadow-soft p-5">
           <h3 className="font-display text-xl tracking-wider">{t("entered14")}</h3>
           <p className="text-xs text-muted-foreground mt-1 mb-4">{t("whenPeopleHint")}</p>
-          <DailyChart days={daily?.days ?? []} />
+          <DailyChart days={shift?.days ?? []} />
         </div>
       </div>
     </section>
@@ -190,7 +179,7 @@ function HourlyChart({
         ))}
       </div>
       <div className="relative flex items-end justify-between gap-1 h-56 px-1">
-        {rows.map((h) => {
+        {rows.map((h, index) => {
           const scale = (v: number) => (v / max) * 100;
           return (
             <div key={h.hour} className="group relative h-full min-w-0 flex-1 flex flex-col items-center gap-2">
@@ -202,7 +191,7 @@ function HourlyChart({
                 />
               </div>
               <div className="h-3 text-[9px] text-muted-foreground tabular-nums whitespace-nowrap">
-                {h.hour % 3 === 0 ? formatHour12(h.hour, lang) : ""}
+                {index % 3 === 0 ? formatHour12(h.hour, lang) : ""}
               </div>
             </div>
           );
@@ -218,7 +207,7 @@ function HourlyChart({
 function DailyChart({
   days,
 }: {
-  days: Array<{ date: string; entries: number; exits: number; visits: number }>;
+  days: Array<{ date: string; entries: number }>;
 }) {
   const { t, locale } = useI18n();
   if (!days.length) {

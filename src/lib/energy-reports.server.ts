@@ -1,6 +1,8 @@
 import {
+  AC_UNITS,
   allSnapshotDevices,
   ENERGY_SAR_PER_KWH,
+  energyCostSar,
   isReportDevice,
   REPORT_DEVICES,
   REPORT_TABLES,
@@ -10,6 +12,8 @@ import {
   riyadhQuarterKey,
   withDailyConsumption,
   withQuarterConsumption,
+  type AcChangeRow,
+  type AcQuarterRow,
   type EnergyReportRow,
   type ReportTable,
 } from "./energy-devices";
@@ -18,7 +22,9 @@ import {
   insertSnapshotRows,
   acQuarterBaseline,
   hourlyBaselineEnergy,
+  listAcChangeRows,
   listAcQuarterRows,
+  listAcQuarterRowsFor,
   listEntityIds,
   listHourlySnapshotRows,
   listMidnightSnapshotRows,
@@ -171,6 +177,17 @@ export async function getAcQuarterBaselines(): Promise<Record<string, { energy: 
   return acQuarterBaseline(riyadhQuarterKey());
 }
 
+/** Closed 15-minute readings and temperature-change events for one AC. */
+export async function getAcUnitHistory(entityId: string): Promise<{ logs: AcQuarterRow[]; changes: AcChangeRow[] }> {
+  const unit = AC_UNITS.find((item) => item.climateId === entityId);
+  if (!unit) return { logs: [], changes: [] };
+  const slotKey = riyadhQuarterKey();
+  const logs = withQuarterConsumption(listAcQuarterRowsFor(unit.climateId))
+    .filter((row) => row.slotKey !== slotKey && row.consumption != null)
+    .sort((a, b) => b.slotKey.localeCompare(a.slotKey));
+  return { logs, changes: listAcChangeRows(unit.climateId) };
+}
+
 export async function getEnergyBaselines(): Promise<Record<string, number>> {
   const todayKey = riyadhDayKey();
   const out: Record<string, number> = {};
@@ -303,12 +320,13 @@ function overviewFromDays(todayKey: string, allDays: EnergyDayPoint[], extra: { 
   const dim = daysInMonth(thisMonth);
   const projected = throughDay ? (monthCurrent / throughDay) * dim : null;
   const tariffSarPerKwh = ENERGY_SAR_PER_KWH;
-  const costSar = monthCurrent * tariffSarPerKwh;
+  const costSar = energyCostSar(monthCurrent);
   const savedParts = [monthPrevious, yearPrevious]
     .filter((n): n is number => n != null)
     .map((baseline) => baseline - monthCurrent);
   const savedAvgKwh = savedParts.length ? savedParts.reduce((sum, n) => sum + n, 0) / savedParts.length : null;
-  const savedVsYearSar = savedAvgKwh != null ? savedAvgKwh * tariffSarPerKwh : null;
+  const savedVsYearSar =
+    savedAvgKwh != null ? energyCostSar(monthCurrent + savedAvgKwh) - energyCostSar(monthCurrent) : null;
 
   const mtdCats = throughDay ? sumCatsRange(allDays, `${thisMonth}-01`, mtdTo) : emptyCats();
   const prevCats = throughDay ? sumCatsRange(allDays, `${prevMonth}-01`, prevTo) : emptyCats();
