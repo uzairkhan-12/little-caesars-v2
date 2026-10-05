@@ -1202,6 +1202,7 @@ function HourlyWindow({
   const recorded = points.filter((point) => point.kwh != null);
   const total = recorded.reduce((sum, point) => sum + (point.kwh ?? 0), 0);
   const savedTotal = points.reduce((sum, point) => sum + (point.saved ?? 0), 0);
+  const savedPeak = points.reduce((max, point) => Math.max(max, point.saved ?? 0), 0);
   const peak = recorded.reduce<HourPoint | null>((best, point) => {
     if (!best || (point.kwh ?? 0) > (best.kwh ?? 0)) return point;
     return best;
@@ -1212,7 +1213,8 @@ function HourlyWindow({
     from: `${formatDayKey(dayKey, locale)} · ${clock}`,
     to: `${formatDayKey(endKey, locale)} · ${clock}`,
   });
-  const stale = points.some((point) => point.live) && liveRows.some((row) => row.stale);
+  const livePoint = points.find((point) => point.live);
+  const stale = Boolean(livePoint && (livePoint.kwh ?? 0) === 0 && liveRows.some((row) => row.stale));
 
   return (
     <section className="mt-5 rounded-2xl bg-gradient-card border border-border shadow-soft overflow-hidden">
@@ -1312,6 +1314,7 @@ function HourlyWindow({
               <XAxis dataKey="label" tickLine={false} axisLine={false} interval={1} tick={{ fontSize: 11 }} />
               <YAxis yAxisId="kwh" tickLine={false} axisLine={false} width={44} tickFormatter={(value) => Number(value).toFixed(1)} />
               <YAxis yAxisId="customers" orientation="right" tickLine={false} axisLine={false} width={32} allowDecimals={false} />
+              <YAxis yAxisId="saved" hide domain={[0, savedPeak > 0 ? savedPeak * 1.25 : 1]} />
               <ChartTooltip
                 cursor={{ fill: "var(--muted)", opacity: 0.35 }}
                 content={
@@ -1336,7 +1339,18 @@ function HourlyWindow({
                   <Cell key={point.key} fill={point.live ? "var(--color-live)" : "var(--color-kwh)"} />
                 ))}
               </Bar>
-              <Line yAxisId="kwh" dataKey="saved" stroke="var(--color-saved)" strokeWidth={2} dot={false} connectNulls={false} />
+              <Line
+                yAxisId="saved"
+                dataKey="saved"
+                stroke="var(--color-saved)"
+                strokeWidth={2}
+                connectNulls={false}
+                dot={(dot) => {
+                  const point = dot.payload as HourPoint | undefined;
+                  if (point?.saved == null || dot.cx == null || dot.cy == null) return <g key={dot.key} />;
+                  return <circle key={dot.key} cx={dot.cx} cy={dot.cy} r={3.5} fill="var(--color-saved)" />;
+                }}
+              />
               <Line yAxisId="customers" dataKey="customers" stroke="var(--color-customers)" strokeWidth={2} dot={false} connectNulls={false} />
             </ComposedChart>
           </ChartContainer>
